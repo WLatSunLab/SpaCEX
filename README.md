@@ -4,7 +4,10 @@ The repository are designed to facilitate easy addition, calling, and debugging 
 input_data.py is used to load the MNIST dataset.
 ```shell
 from input_data import MnistDataset
-dataset = MnistDataset()
+
+num=10000
+
+dataset = MnistDataset(num)
 ```
 # driver.py
 This project stores different encoder methods such as CAE, VIT in the Encoder folder. To facilitate testing of different encoders, driver is used for encoder selection. If members need to add new encoders, please write based on the frameworks of existing encoders.
@@ -13,10 +16,12 @@ import driver
 import torch
 from input_data import MnistDataset
 
+num=10000
+
 cuda = torch.cuda.is_available()
 print("use cuda: {}".format(cuda))
 device = torch.device("cuda" if cuda else "cpu")
-dataset = MnistDataset()
+dataset = MnistDataset(num)
 
 model = driver.model('CAE')
 model.to(device)
