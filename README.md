@@ -9,9 +9,9 @@ dataset = MnistDataset()
 # driver.py
 This project stores different encoder methods such as CAE, VIT in the Encoder folder. To facilitate testing of different encoders, driver is used for encoder selection. If members need to add new encoders, please write based on the frameworks of existing encoders.
 ```shell
-from input_data import MnistDataset
 import driver
 import torch
+from input_data import MnistDataset
 
 cuda = torch.cuda.is_available()
 print("use cuda: {}".format(cuda))
