@@ -37,7 +37,7 @@ data = dataset.x
 y = dataset.y
 data = torch.Tensor(data).to(device)
 data=data.unsqueeze(1)
-x_bar, hidden = cae(data)
+x_bar, hidden = model(data)
 '''
 
 class PatchEmbed(nn.Module):
