@@ -33,3 +33,23 @@ data = torch.Tensor(data).to(device)
 data=data.unsqueeze(1)
 x_bar, hidden, q = model(data)
 ```
+#clustering.py
+In this file, it is required to first pre-train the specified encoder and then perform DEC.
+```shell
+import torch
+import driver
+import torch
+from input_data import MnistDataset
+from clustering import clustering
+
+cuda = torch.cuda.is_available()
+print("use cuda: {}".format(cuda))
+device = torch.device("cuda" if cuda else "cpu")
+dataset = MnistDataset(10000)
+
+model = driver.model('CAE')
+model.to(device)
+model.pretrain(dataset)
+
+y_pred = clustering(model, dataset)
+```
