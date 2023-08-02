@@ -23,21 +23,21 @@ For MNIST data sets
 '''
 
 '''Example
-from encoder import CAE
+import CAE
 from input_data import MnistDataset
 
 cuda = torch.cuda.is_available()
 print("use cuda: {}".format(cuda))
 device = torch.device("cuda" if cuda else "cpu")
 dataset = MnistDataset()
-cae = CAE()
-cae.to(device)
-cae.pretrain(dataset)
+model = CAE()
+model.to(device)
+model.pretrain(dataset)
 data = dataset.x
 y = dataset.y
 data = torch.Tensor(data).to(device)
 data=data.unsqueeze(1)
-x_bar, hidden = cae(data)
+x_bar, hidden = model(data)
 '''
 
 def con3x3(in_planes, out_planes, stride=1):
