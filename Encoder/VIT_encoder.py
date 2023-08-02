@@ -273,8 +273,8 @@ class VIT(nn.Module):
 
         self.vitae = VIT_coder(n_enc_1=n_enc_1,n_enc_2=n_enc_2,n_enc_3=n_enc_3,n_dec_1=n_dec_1,n_dec_2=n_dec_2,n_dec_3=n_dec_3,n_input=n_input,n_z=n_z)
         # cluster layer
-        #self.cluster_layer = Parameter(torch.Tensor(n_clusters, n_z))
-        #torch.nn.init.xavier_normal_(self.cluster_layer.data)
+        self.cluster_layer = Parameter(torch.Tensor(10, n_z))
+        torch.nn.init.xavier_normal_(self.cluster_layer.data)
 
     def pretrain(self, dataset, path=''):
         if path == '':
@@ -286,6 +286,10 @@ class VIT(nn.Module):
     def forward(self, x):
 
         x_bar, hidden = self.vitae(x)
+        q = 1.0 / (1.0 + torch.sum(
+            torch.pow(hidden.unsqueeze(1) - self.cluster_layer, 2), 2) / self.alpha)
+        q = q.pow((self.alpha + 1.0) / 2.0)
+        q = (q.t() / torch.sum(q, 1)).t()
 
-        return x_bar, hidden
+        return x_bar, hidden, q
 
