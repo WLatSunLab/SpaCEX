@@ -21,4 +21,10 @@ dataset = MnistDataset()
 model = driver.model('CAE')
 model.to(device)
 model.pretrain(dataset)
+
+data = dataset.x
+y = dataset.y
+data = torch.Tensor(data).to(device)
+data=data.unsqueeze(1)
+x_bar, hidden, q = model(data)
 ```
