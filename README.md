@@ -33,7 +33,7 @@ data = torch.Tensor(data).to(device)
 data=data.unsqueeze(1)
 x_bar, hidden, q = model(data)
 ```
-#clustering.py
+# clustering.py
 In this file, it is required to first pre-train the specified encoder and then perform DEC.
 ```shell
 import torch
