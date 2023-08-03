@@ -1,5 +1,5 @@
 # Description
-The repository are designed to facilitate easy addition, calling, and debugging of encoders all members of the IDEC project team.
+The repository are designed to facilitate easy addition, calling, and debugging of encoders all members of the TBD project team.
 # input_data.py
 input_data.py is used to load the MNIST dataset.
 ```shell
