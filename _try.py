@@ -31,7 +31,7 @@ if not os.path.exists(path):
     os.mkdir(path)
 tsne_print(model, dataset, num, path)
 
-eval.to_csv('path{}eval.txtl'.format(path),sep=' ')
-with open('path{}eval.txtl'.format(path), 'a', encoding='utf-8') as f:
+eval.to_csv('{}eval.txt'.format(path),sep=' ')
+with open('{}eval.txt'.format(path), 'a', encoding='utf-8') as f:
     # 将dic dumps json 格式进行写入
     f.write(json.dumps(config))
