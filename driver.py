@@ -23,8 +23,8 @@ def model(encoder, config):
                     bolck2_outplanes=config['bolck2_outplanes'],
                     bolck3_outplanes=config['bolck3_outplanes'],
                     bolck4_outplanes=config['bolck4_outplanes'],
-                    layers_num=config['layers_num'],  # layers的层数，至少为1
-                    maxpool_dr=config['maxpool_dr'],  # 0表示不用maxpooling降维
+                    layers_num=config['layers_num'],  
+                    maxpool_dr=config['maxpool_dr'], 
                     pool_bool=config['pool_bool'],
                     alpha=config['alpha'],
                     n_z = config['n_z'])
