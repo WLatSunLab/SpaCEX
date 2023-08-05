@@ -165,7 +165,7 @@ def tsne_print(model, dataset, num, path):
     cbar.ax.set_yticklabels(np.unique(labels))
 
     ax.legend()
-    plt.savefig(path, dpi=300)
+    plt.savefig(path+'.png', dpi=300)
     plt.show()
 
 
