@@ -8,7 +8,7 @@ import numpy as np
 import json
 import os
 
-config = Config().get_parameters()
+config = Config(dataset='Cifar10', model='CAE').get_parameters()
 num = 10000
 
 cuda = torch.cuda.is_available()
