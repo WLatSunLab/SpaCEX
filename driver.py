@@ -1,5 +1,5 @@
-from CAE_encoder import CAE
-#from VIT_encoder import VIT
+from Encoder.CAE_encoder import CAE
+#from Encoder.VIT_encoder import VIT
 #from _config import Config
 
 '''
