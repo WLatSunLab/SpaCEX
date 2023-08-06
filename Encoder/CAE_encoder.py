@@ -13,7 +13,6 @@ from torch.utils.data import DataLoader
 from torch.nn import Linear
 from torchvision.models.video.resnet import model_urls
 
-
 '''CAE_encoder
 For MNIST data sets
 '''
@@ -54,7 +53,7 @@ class BasicBlock(nn.Module):
         super(BasicBlock, self).__init__()
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
-        if groups !=1 or base_width != 64:
+        if groups != 1 or base_width != 64:
             raise ValueError('BasicBlock only supports groups=1 and base_width=64')
         if dilation > 1:
             raise NotImplementedError("Dilation > 1 not supported in BasicBlock")
@@ -82,7 +81,7 @@ class BasicBlock(nn.Module):
             out = self.conv2(out)
             out = self.bn2(out)
 
-        if self.dowansample is not None: # 这是为了保证原始输入与卷积后的输出层叠加时维度相同
+        if self.dowansample is not None:  # 这是为了保证原始输入与卷积后的输出层叠加时维度相同
             identity = self.dowansample(x)
 
         out = out + identity
@@ -93,6 +92,7 @@ class BasicBlock(nn.Module):
 
 class ResNet(nn.Module):
     def __init__(self, block, layers,
+                 in_channels=1,
                  conv1_outplanes=32,
                  bolck1_outplanes=64,
                  bolck2_outplanes=128,
@@ -103,7 +103,8 @@ class ResNet(nn.Module):
                  maxpool_dr=1,  # 0表示不用maxpooling降维
                  pool_bool=0,  # 0表示不pooling，1表示avg，2表示max
                  ):
-    # layers=参数列表 block选择不同的类
+        # layers=参数列表 block选择不同的类
+        self.in_channels = in_channels
         self.inplanes = conv1_outplanes
         self.bolck1_outplanes = bolck1_outplanes
         self.bolck2_outplanes = bolck2_outplanes
@@ -114,13 +115,16 @@ class ResNet(nn.Module):
         self.pool_bool = pool_bool
         super(ResNet, self).__init__()
         # 1.conv1, 1x28x28->conv1_outplanesx14x14
-        self.conv1 = nn.Conv2d(1, conv1_outplanes, kernel_size=3, stride=2, padding=1,bias=False) 
+        self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=conv1_outplanes, kernel_size=3, stride=2,
+                               padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(conv1_outplanes)
         self.relu = nn.ReLU(inplace=True)
         # 2.conv2_x, conv1_outplanesx14x14->bolck1_outplanesx7x7
         self.maxpool1 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.layer1_1 = self._make_layer(block, planes=bolck1_outplanes, blocks=layers[0], stride=1, basic_num=basic_num)
-        self.layer1_2 = self._make_layer(block, planes=bolck1_outplanes, blocks=layers[0], stride=2, basic_num=basic_num)
+        self.layer1_1 = self._make_layer(block, planes=bolck1_outplanes, blocks=layers[0], stride=1,
+                                         basic_num=basic_num)
+        self.layer1_2 = self._make_layer(block, planes=bolck1_outplanes, blocks=layers[0], stride=2,
+                                         basic_num=basic_num)
         # 3.conv3_x, bolck1_outplanesx7x7->bolck2_outplanesx4x4
         self.layer2 = self._make_layer(block, planes=bolck2_outplanes, blocks=layers[1], stride=2, basic_num=basic_num)
         # 4.conv4_x, bolck2_outplanesx4x4->bolck3_outplanesx2x2
@@ -134,8 +138,7 @@ class ResNet(nn.Module):
         self.maxpool2_2 = nn.MaxPool2d(4)
         self.maxpool2_3 = nn.MaxPool2d(2)
 
-		
-		# 初始化权重
+        # 初始化权重
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
@@ -175,20 +178,20 @@ class ResNet(nn.Module):
             x = self.layer1_2(x)
         if self.layers_num >= 1:
             if self.pool_bool == 0:
-                n_z = self.bolck1_outplanes*7*7
+                n_z = self.bolck1_outplanes * 7 * 7
             elif self.pool_bool == 1:  # 使用avgpool
                 x = self.avgpool1(x)
                 n_z = self.bolck1_outplanes
             elif self.pool_bool == 2:  # 使用maxpool
                 x = self.maxpool2_1(x)
                 n_z = self.bolck1_outplanes
-            if self.layers_num ==1:
+            if self.layers_num == 1:
                 x = x.view(x.size(0), -1)
                 return x, n_z
             elif self.layers_num >= 2:
                 x = self.layer2(x)
                 if self.pool_bool == 0:
-                    n_z = self.bolck2_outplanes*4*4
+                    n_z = self.bolck2_outplanes * 4 * 4
                 elif self.pool_bool == 1:  # 使用avgpool
                     x = self.avgpool2(x)
                     n_z = self.bolck2_outplanes
@@ -201,7 +204,7 @@ class ResNet(nn.Module):
                 elif self.layers_num >= 3:
                     x = self.layer3(x)
                     if self.pool_bool == 0:
-                        n_z = self.bolck3_outplanes*2*2
+                        n_z = self.bolck3_outplanes * 2 * 2
                     elif self.pool_bool == 1:  # 使用avgpool
                         x = self.avgpool3(x)
                         n_z = self.bolck3_outplanes
@@ -214,13 +217,13 @@ class ResNet(nn.Module):
                     elif self.layers_num == 4:
                         x = self.layer4(x)
                         if self.pool_bool == 0:
-                            n_z = self.bolck4_outplanes*1*1
-                            x = x.view(x.size(0), -1)   # 将输出结果展成一行
+                            n_z = self.bolck4_outplanes * 1 * 1
+                            x = x.view(x.size(0), -1)  # 将输出结果展成一行
                             return x, n_z  # 返回的应该是n_z的向量
 
 
-
-def resnet18(pretrained=False, 
+def resnet18(in_channels=1,
+             pretrained=False,
              basic_num=2,
              conv1_outplanes=32,
              bolck1_outplanes=64,
@@ -235,7 +238,9 @@ def resnet18(pretrained=False,
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    model = ResNet(block=BasicBlock, layers=[2, 2, 2, 2],
+    model = ResNet(in_channels=in_channels,
+                   block=BasicBlock,
+                   layers=[2, 2, 2, 2],
                    basic_num=basic_num,
                    conv1_outplanes=conv1_outplanes,
                    bolck1_outplanes=bolck1_outplanes,
@@ -259,7 +264,7 @@ def pretrain_cae(model, dataset, batch_size):
     optimizer = Adam(model.parameters(), lr=0.001)
     cuda = torch.cuda.is_available()
     device = torch.device("cuda" if cuda else "cpu")
-    #model.to(device)
+    # model.to(device)
     for epoch in range(100):
         total_loss = 0.
         for batch_idx, (x, _, _) in enumerate(train_loader):
@@ -271,8 +276,8 @@ def pretrain_cae(model, dataset, batch_size):
             total_loss += loss.item()
 
             loss.backward()
-            #loss1 = loss.detach_().requires_grad_(True)
-            #loss1.backward()
+            # loss1 = loss.detach_().requires_grad_(True)
+            # loss1.backward()
             optimizer.step()
 
         print("epoch {} loss={:.4f}".format(epoch,
@@ -283,8 +288,8 @@ def pretrain_cae(model, dataset, batch_size):
 
 class CAE_coder(nn.Module):
 
-    def __init__(self, n_enc_1, n_enc_2, n_enc_3, n_dec_1, n_dec_2, n_dec_3,
-                 n_input,
+    def __init__(self,
+                 in_channels,
                  basic_num,
                  conv1_outplanes,
                  bolck1_outplanes,
@@ -294,12 +299,13 @@ class CAE_coder(nn.Module):
                  layers_num,  # layers的层数，至少为1
                  maxpool_dr,  # 0表示不用maxpooling降维
                  pool_bool,
-                 n_z# 0表示不pooling，1表示avg，2表示max
+                 n_z  # 0表示不pooling，1表示avg，2表示max
                  ):
         super(CAE_coder, self).__init__()
 
         # encoder, get Nxbolck3_outplanesx1
         self.encoder = resnet18(pretrained=False,
+                                in_channels=in_channels,
                                 basic_num=basic_num,
                                 conv1_outplanes=conv1_outplanes,
                                 bolck1_outplanes=bolck1_outplanes,
@@ -311,111 +317,108 @@ class CAE_coder(nn.Module):
                                 pool_bool=pool_bool)
 
         # decoder
-        
-
-        self.decoder = nn.Sequential(
-            nn.Linear(in_features=n_z, out_features=128),
-            nn.ReLU(True),
-            nn.Linear(128, 3 * 3 * 32),
-            nn.ReLU(True),
-            # 1x3*3*32->32x3x3
-            nn.Unflatten(dim=1, unflattened_size=(32, 3, 3)),
-            # 32x3x3->16x7x7
-            nn.ConvTranspose2d(32, 16, 3, stride=2, output_padding=0),
-            nn.BatchNorm2d(16),
-            nn.ReLU(True),
-            # 16x7x7->8x14x14
-            nn.ConvTranspose2d(16, 8, 3, stride=2, padding=1, output_padding=1),
-            nn.BatchNorm2d(8),
-            nn.ReLU(True),
-            # 8x14x14->1x28x28
-            nn.ConvTranspose2d(8, 1, 3, stride=2, padding=1, output_padding=1)
+        if in_channels == 1:
+            self.decoder = nn.Sequential(
+                nn.Linear(in_features=n_z, out_features=128),
+                nn.ReLU(True),
+                nn.Linear(128, 3 * 3 * 32),
+                nn.ReLU(True),
+                # 1x3*3*32->32x3x3
+                nn.Unflatten(dim=1, unflattened_size=(32, 3, 3)),
+                # 32x3x3->16x7x7
+                nn.ConvTranspose2d(32, 16, 3, stride=2, output_padding=0),
+                nn.BatchNorm2d(16),
+                nn.ReLU(True),
+                # 16x7x7->8x14x14
+                nn.ConvTranspose2d(16, 8, 3, stride=2, padding=1, output_padding=1),
+                nn.BatchNorm2d(8),
+                nn.ReLU(True),
+                # 8x14x14->1x28x28
+                nn.ConvTranspose2d(8, 1, 3, stride=2, padding=1, output_padding=1)
             )
-            
-    
+        if in_channels == 3:
+            self.decoder = nn.Sequential(
+                nn.Linear(in_features=n_z, out_features=256),
+                nn.ReLU(True),
+                nn.Linear(256, 3 * 3 * 32),
+                nn.Unflatten(dim=1, unflattened_size=(32, 3, 3)),
+                # 32x3x3->16x8x8
+                nn.ConvTranspose2d(32, 16, 3, stride=2, output_padding=1),
+                nn.BatchNorm2d(16),
+                nn.ReLU(True),
+                # 16x8x8->8x16x16
+                nn.ConvTranspose2d(16, 8, 3, stride=2, padding=1, output_padding=1),
+                nn.BatchNorm2d(8),
+                nn.ReLU(True),
+                # 8x16x16->1x32x32
+                nn.ConvTranspose2d(8, 3, 3, stride=2, padding=1, output_padding=1)
+            )
 
-    
-    def forward(self, x):
-        # encoder
-        z, n_z = self.encoder(x)
-        # decoder
-        x_bar = self.decoder(z)
+            def forward(self, x):
+                # encoder
+                z, n_z = self.encoder(x)
+                # decoder
+                x_bar = self.decoder(z)
 
-        return x_bar, z, n_z
+                return x_bar, z, n_z
 
+        class CAE(nn.Module):
 
+            def __init__(self,
+                         in_channels=1,
+                         basic_num=2,
+                         conv1_outplanes=32,
+                         bolck1_outplanes=64,
+                         bolck2_outplanes=128,
+                         bolck3_outplanes=256,
+                         bolck4_outplanes=512,
+                         layers_num=3,  # layers的层数，至少为1
+                         maxpool_dr=1,  # 0表示不用maxpooling降维
+                         pool_bool=0,
+                         alpha=1.0,
+                         n_z=1024,
+                         batch_size=256,
+                         pretrain_path='cae_mnist.pkl'
+                         ):
+                super(CAE, self).__init__()
+                self.alpha = 1
+                self.batch_size = batch_size
+                self.pretrain_path = pretrain_path
 
-class CAE(nn.Module):
+                self.cae = CAE_coder(
+                    in_channels=in_channels,
+                    basic_num=basic_num,
+                    conv1_outplanes=conv1_outplanes,
+                    bolck1_outplanes=bolck1_outplanes,
+                    bolck2_outplanes=bolck2_outplanes,
+                    bolck3_outplanes=bolck3_outplanes,
+                    bolck4_outplanes=bolck4_outplanes,
+                    layers_num=layers_num,  # layers的层数，至少为1
+                    maxpool_dr=maxpool_dr,  # 0表示不用maxpooling降维
+                    pool_bool=pool_bool,
+                    n_z=n_z, )
+                # cluster layer
+                self.alpha = alpha
+                self.cluster_layer = Parameter(torch.Tensor(10, n_z))
+                torch.nn.init.xavier_normal_(self.cluster_layer.data)
 
-    def __init__(self,
-                 n_enc_1=500,
-                 n_enc_2=500,
-                 n_enc_3=1000,
-                 n_dec_1=1000,
-                 n_dec_2=500,
-                 n_dec_3=500,
-                 n_input=784,
-                 n_clusters=10,
-                 basic_num=2,
-                 conv1_outplanes=32,
-                 bolck1_outplanes=64,
-                 bolck2_outplanes=128,
-                 bolck3_outplanes=256,
-                 bolck4_outplanes=512,
-                 layers_num=3,  # layers的层数，至少为1
-                 maxpool_dr=1,  # 0表示不用maxpooling降维
-                 pool_bool=0,
-                 alpha=1.0,
-                 n_z=1024,
-                 batch_size=256,
-                 pretrain_path='cae_mnist.pkl'
-                ):
-        super(CAE, self).__init__()
-        self.alpha = 1
-        self.batch_size = batch_size
-        self.pretrain_path = pretrain_path
+            def pretrain(self, dataset, batch_size, path=''):
+                if path == '':
+                    pretrain_cae(self.cae, dataset, batch_size)
+                # load pretrain weights
+                self.cae.load_state_dict(torch.load(self.pretrain_path))
+                print('load pretrained cae from', self.pretrain_path)
 
-        self.cae = CAE_coder(
-            n_enc_1=n_enc_1,
-            n_enc_2=n_enc_2,
-            n_enc_3=n_enc_3,
-            n_dec_1=n_dec_1,
-            n_dec_2=n_dec_2,
-            n_dec_3=n_dec_3,
-            n_input=n_input,
-            basic_num=basic_num,
-            conv1_outplanes=conv1_outplanes,
-            bolck1_outplanes=bolck1_outplanes,
-            bolck2_outplanes=bolck2_outplanes,
-            bolck3_outplanes=bolck3_outplanes,
-            bolck4_outplanes=bolck4_outplanes,
-            layers_num=layers_num,  # layers的层数，至少为1
-            maxpool_dr=maxpool_dr,  # 0表示不用maxpooling降维
-            pool_bool=pool_bool,
-            n_z=n_z,)
-        # cluster layer
-        self.alpha = alpha
-        self.cluster_layer = Parameter(torch.Tensor(10, n_z))
-        torch.nn.init.xavier_normal_(self.cluster_layer.data)
+            def forward(self, x):
+                x_bar, hidden, n_z = self.cae(x)
+                # cluster_layer = Parameter(torch.Tensor(10, n_z))
+                # torch.nn.init.xavier_normal_(cluster_layer.data)
+                # cluster
+                q = 1.0 / (1.0 + torch.sum(
+                    torch.pow(hidden.unsqueeze(1) - self.cluster_layer, 2), 2) / self.alpha)
+                q = q.pow((self.alpha + 1.0) / 2.0)
+                q = (q.t() / torch.sum(q, 1)).t()
 
-    def pretrain(self, dataset, batch_size, path=''):
-        if path == '':
-            pretrain_cae(self.cae, dataset, batch_size)
-        # load pretrain weights
-        self.cae.load_state_dict(torch.load(self.pretrain_path))
-        print('load pretrained cae from', self.pretrain_path)
-
-    def forward(self, x):
-
-        x_bar, hidden, n_z = self.cae(x)
-        #cluster_layer = Parameter(torch.Tensor(10, n_z))
-        #torch.nn.init.xavier_normal_(cluster_layer.data)
-        # cluster
-        q = 1.0 / (1.0 + torch.sum(
-            torch.pow(hidden.unsqueeze(1) - self.cluster_layer, 2), 2) / self.alpha)
-        q = q.pow((self.alpha + 1.0) / 2.0)
-        q = (q.t() / torch.sum(q, 1)).t()
-
-        return x_bar, hidden, q
+                return x_bar, hidden, q
 
 
