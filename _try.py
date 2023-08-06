@@ -16,7 +16,7 @@ print("use cuda: {}".format(cuda))
 device = torch.device("cuda" if cuda else "cpu")
 dataset = MnistDataset(num)
 
-model = driver.model('CAE',config)
+model = driver.model('Cifar10', 'CAE', config)
 model.to(device)
 model.pretrain(dataset, batch_size=config['batch_size'], path='/content/cae_mnist.pkl')
 
