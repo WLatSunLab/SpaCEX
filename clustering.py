@@ -7,7 +7,7 @@ from sklearn.metrics.cluster import normalized_mutual_info_score as nmi_score
 from sklearn.metrics import adjusted_rand_score as ari_score
 from torch.optim import Adam
 from torch.utils.data import DataLoader
-from _config import Config
+#from _config import Config
 
 
 def target_distribution(q):
@@ -48,8 +48,10 @@ def clustering(model, dataset, config):
     # cluster parameter initiate
     data = dataset.x
     y = dataset.y
+    y = y.reshape(y.shape[0])
     data = torch.Tensor(data).to(device)
-    data = data.unsqueeze(1)
+    if len(data.shape) == 3:
+        data = data.unsqueeze(1)
     x_bar, hidden, _ = model.cae(data)
 
     kmeans = KMeans(n_clusters=10, n_init=config['n_init'])
