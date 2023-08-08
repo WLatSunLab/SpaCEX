@@ -86,20 +86,20 @@ class VGG_emb(nn.Module):
         return s
         
     
-    def __init__(self, num_classes=10):
+    def __init__(self, num_classes=10, conv1_outplanes=64, conv2_outplanes=128, conv3_outplanes=256, conv4_outplanes=512, hidden_size=512,p=0.5):
         super(VGG, self).__init__()
-        self.l1 = self.two_conv_pool(1, 64, 64)
-        self.l2 = self.two_conv_pool(64, 128, 128)
-        self.l3 = self.three_conv_pool(128, 256, 256, 256)
-        self.l4 = self.three_conv_pool(256, 256, 256, 512)
+        self.l1 = self.two_conv_pool(1, conv1_outplanes, conv1_outplanes)
+        self.l2 = self.two_conv_pool(conv1_outplanes, conv2_outplanes, conv2_outplanes)
+        self.l3 = self.three_conv_pool(conv2_outplanes, conv3_outplanes, conv3_outplanes, conv3_outplanes)
+        self.l4 = self.three_conv_pool(conv3_outplanes, conv4_outplanes, conv4_outplanes, conv4_outplanes)
         
         self.classifier = nn.Sequential(
-            nn.Dropout(p = 0.5),
-            nn.Linear(256, 512),
-            nn.BatchNorm1d(512),
+            nn.Dropout(p),
+            nn.Linear(2 * conv4_outplanes, hidden_size),
+            nn.BatchNorm1d(hidden_size),
             nn.ReLU(inplace=True),
-            nn.Dropout(p = 0.5),
-            nn.Linear(512, num_classes),
+            nn.Dropout(p),
+            nn.Linear(hidden_size, num_classes)
         )
     
     def forward(self, x):
