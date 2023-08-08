@@ -147,7 +147,7 @@ def tsne_print(model, dataset, num, path):
     # Concatenate embeddings from all batches
     import numpy as np
     projections = np.array(projections)
-    projections = projections.reshape(10000,-1)
+    projections = projections.reshape(num,-1)
     labels = np.array(labels)
 
     print(projections.shape, labels.shape)
