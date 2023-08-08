@@ -1,5 +1,6 @@
-from Encoder.CAE_encoder import CAE
-#from Encoder.VIT_encoder import VIT
+from CAE_encoder import CAE
+from MAE_encoder import MAE
+#from VIT_encoder import VIT
 #from _config import Config
 
 '''
@@ -31,8 +32,21 @@ def model(dataset, encoder, config):
                 pool_bool=config['pool_bool'],
                 alpha=config['alpha'],
                 n_z = config['n_z'])
-        #if encoder == 'VIT':
-            #model = VIT()
+        if encoder == 'MAE':
+            model = MAE(
+                img_size=config['img_size'],
+                patch_size=config['patch_size'],
+                in_chans=config['in_chans'],
+                embed_dim=config['embed_dim'],
+                depth=config['depth'],
+                num_heads=config['num_heads'],
+                dim_head=config['dim_head'],
+                decoder_embed_dim=config['decoder_embed_dim'],
+                mlp_ratio=config['mlp_ratio'],
+                norm_pix_loss=config['norm_pix_loss'],
+                alpha=config['alpha'],
+                n_clusters=config['n_clusters'],
+            )
     if dataset =='Cifar10':
         if encoder == 'CAE':
             model = CAE(
