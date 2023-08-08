@@ -48,6 +48,22 @@ class Config:
                     'n_init': 20,
                     'interval': 1  # DEC时的训练间隔
                 }
+                'VGG':{
+                    'batch_size': 256,  # 预训练时的batch_size
+                    'lr': 0.001,  # 预训练时的学习率
+                    'alpha': 1.0,  # DEC时的alpha
+                    'n_epochs': 100,  # 预选连的epoch数
+                    'tol': 0.001,  # DEC时优化容忍度
+                    'update_interval': 1,  # DEC时的训练间隔
+                    'num_classes': 10,  # 在MNIST上
+                    'conv1_outplanes': 64,  # 初始卷积参数
+                    'conv2_outplanes': 128,
+                    'conv3_outplanes': 256,
+                    'conv4_outplanes': 512,
+                    'hidden_size':512,  #分类器中隐藏层的单元数量
+                    'p':0.5,  #丢弃概率
+                    'interval': 1  # DEC时的训练间隔
+                }
             },
             'Cifar10': {
                 'CAE': {
