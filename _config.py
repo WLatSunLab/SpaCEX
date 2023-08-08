@@ -1,17 +1,17 @@
 
 
 class Config:
-    def __init__(self,  dataset='MNIST', model='CAE'):
+    def __init__(self,  dataset='MNIST', model='MAE'):
         config = {
             'MNIST': {
                 'CAE': {
+                    'model': 'CAE',  # 做模型标记，后续用作聚类判断
                     'in_channels': 1,  # 在MNIST上Channel为1
                     'batch_size': 256,  # 预训练时的batch_size
                     'lr': 0.001,  # 预训练时的学习率
                     'alpha': 1.0,  # DEC时的alpha
                     'n_epochs': 100,  # 预训练的epoch数
                     'tol': 0.001,  # DEC时优化容忍度
-                    'update_interval': 1,  # DEC时的训练间隔
                     'num_classes': 10,  # 在MNIST上
                     'basic_num': 1,  # 决定basicblock上的卷积次数，至少为1
                     'conv1_outplanes': 32,  # 初始卷积参数
@@ -25,11 +25,33 @@ class Config:
                     'n_init': 20,  # kmeans的初始参数
                     'interval': 1  # DEC时的训练间隔
                 },
-                'VIT':{},
-                'MAE':{}
+                'VIT': {},
+                'MAE': {
+                    'model': 'MAE',  # 做模型标记，后续用作聚类判断
+                    'batch_size': 256,  # dddd
+                    'lr': 0.001,  # dddd
+                    'n_epochs': 100,  # dddd
+                    'tol': 0.001,  # DEC时优化容忍度
+                    'num_classes': 10,  # 数据集类别，MNIST为10
+                    'img_size': (28, 28),  # 图像大小，MNIST为[28, 28]
+                    'patch_size': (4, 4),  #
+                    'in_chans': 1,  # 输入图像channel，MNIST为1
+                    'embed_dim': 16,  # 编码大小，指定为p**2*channel
+                    'depth': 2,  # 执行多少次Transformer
+                    'num_heads': 4,  # 多头注意力中的“头”
+                    'dim_head': 4,  # 多头注意力中每个“头”的维度
+                    'decoder_embed_dim': 16,  # 用于计算decoder时的位置嵌入
+                    'mlp_ratio': 4,  # Transformer中隐藏层维度倍数
+                    'norm_pix_loss': False,  # 是否执行归一化
+                    'alpha': 1,  # dddd
+                    'n_clusters': 10,
+                    'n_init': 20,
+                    'interval': 1  # DEC时的训练间隔
+                }
             },
-            'Cifar10':{
-                'CAE':{
+            'Cifar10': {
+                'CAE': {
+                    'model': 'CAE',  # 做模型标记，后续用作聚类判断
                     'in_channels': 3,  # 在彩色图像如Cifar上Channel为3
                     'batch_size': 256,  # 预训练时的batch_size
                     'lr': 0.001,  # 预训练时的学习率
