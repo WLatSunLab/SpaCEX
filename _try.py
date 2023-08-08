@@ -8,7 +8,7 @@ import numpy as np
 import json
 import os
 
-config = Config(dataset='Cifar10', model='CAE').get_parameters()
+config = Config().get_parameters()
 num = 10000
 
 cuda = torch.cuda.is_available()
@@ -16,9 +16,9 @@ print("use cuda: {}".format(cuda))
 device = torch.device("cuda" if cuda else "cpu")
 dataset = MnistDataset(num)
 
-model = driver.model('Cifar10', 'CAE', config)
+model = driver.model('MNIST', 'CMAE', config)
 model.to(device)
-model.pretrain(dataset, batch_size=config['batch_size'], path='/content/cae_mnist.pkl')
+model.pretrain(dataset, batch_size=config['batch_size'], lr=config['lr'])
 
 y_pred, acc_train, ari_train, nmi_train = clustering(model, dataset, config)
 
