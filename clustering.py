@@ -52,8 +52,10 @@ def clustering(model, dataset, config):
     data = torch.Tensor(data).to(device)
     if len(data.shape) == 3:
         data = data.unsqueeze(1)
-    x_bar, hidden, _ = model.cae(data)
-
+    if config['model'] == 'CAE':
+        x_bar, hidden, _ = model.cae(data)
+    if config['model'] == 'MAE':
+        hidden,_,x_bar,_= model.mae(data)
     kmeans = KMeans(n_clusters=10, n_init=config['n_init'])
     y_pred = kmeans.fit_predict(hidden.data.cpu().numpy())
     nmi_k = nmi_score(y_pred, y)
@@ -69,8 +71,11 @@ def clustering(model, dataset, config):
     for epoch in range(config['n_epochs']):
 
         if epoch % config['interval'] == 0:
+            if config['model'] == 'CAE':
+                _, _, tmp_q = model(data)
+            if config['model'] == 'MAE':
+                _, tmp_q, _ = model(data)
 
-            _, _, tmp_q = model(data)
 
             # update target distribution p
             tmp_q = tmp_q.data
@@ -100,10 +105,11 @@ def clustering(model, dataset, config):
 
             x = x.to(device)
             idx = idx.to(device)
-
-            x_bar, hidden, q = model(x)
-
-            reconstr_loss = F.mse_loss(x_bar, x)
+            if config['model'] == 'CAE':
+                x_bar, hidden, q = model(x)
+                reconstr_loss = F.mse_loss(x_bar, x)
+            if config['model'] == 'MAE':
+                x_bar, q, reconstr_loss = model(x)
             kl_loss = F.kl_div(q.log(), p[idx])
             loss = 0.1 * kl_loss + reconstr_loss
 
