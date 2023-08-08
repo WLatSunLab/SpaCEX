@@ -10,7 +10,7 @@ class Config:
                     'batch_size': 256,  # 预训练时的batch_size
                     'lr': 0.001,  # 预训练时的学习率
                     'alpha': 1.0,  # DEC时的alpha
-                    'n_epochs': 100,  # 预训练的epoch数
+                    'n_epochs': 20,  # 预训练的epoch数
                     'tol': 0.001,  # DEC时优化容忍度
                     'num_classes': 10,  # 在MNIST上
                     'basic_num': 1,  # 决定basicblock上的卷积次数，至少为1
@@ -29,15 +29,15 @@ class Config:
                 'MAE': {
                     'model': 'MAE',  # 做模型标记，后续用作聚类判断
                     'batch_size': 256,  # dddd
-                    'lr': 0.001,  # dddd
-                    'n_epochs': 100,  # dddd
+                    'lr': 0.01,  # dddd
+                    'n_epochs': 20,  # dddd
                     'tol': 0.001,  # DEC时优化容忍度
                     'num_classes': 10,  # 数据集类别，MNIST为10
                     'img_size': (28, 28),  # 图像大小，MNIST为[28, 28]
                     'patch_size': (4, 4),  #
                     'in_chans': 1,  # 输入图像channel，MNIST为1
                     'embed_dim': 16,  # 编码大小，指定为p**2*channel
-                    'depth': 2,  # 执行多少次Transformer
+                    'depth': 4,  # 执行多少次Transformer
                     'num_heads': 4,  # 多头注意力中的“头”
                     'dim_head': 4,  # 多头注意力中每个“头”的维度
                     'decoder_embed_dim': 16,  # 用于计算decoder时的位置嵌入
