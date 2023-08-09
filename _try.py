@@ -8,15 +8,15 @@ import numpy as np
 import json
 import os
 
-config = Config().get_parameters()
-num = 10000
+config = Config(dataset='MNIST', model='MAE').get_parameters()
+num = 18000
 
 cuda = torch.cuda.is_available()
 print("use cuda: {}".format(cuda))
 device = torch.device("cuda" if cuda else "cpu")
 dataset = MnistDataset(num)
 
-model = driver.model('MNIST', 'CMAE', config)
+model = driver.model('MNIST', 'MAE', config)
 model.to(device)
 model.pretrain(dataset, batch_size=config['batch_size'], lr=config['lr'])
 
