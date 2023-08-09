@@ -1,5 +1,5 @@
 # Description
-The repository are designed to facilitate easy addition, calling, and debugging of encoders all members of the TBD project team.
+The repository are designed to facilitate easy addition, calling, and debugging of encoders all members of the SLSCG project team.
 
 # How to use
 You can find an example in the _try.py file.
