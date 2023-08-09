@@ -1,7 +1,8 @@
 import torch
 import driver
 from dataset import MnistDataset
-from DEC import DEC, tsne_print
+from evalution import tsne_print
+from DEC import DEC
 from _config import Config
 import pandas as pd
 import numpy as np
