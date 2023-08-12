@@ -49,6 +49,7 @@ class Config:
                     'interval': 1  # DEC时的训练间隔
                 },
                 'VGG':{
+                    'model': 'VGG',  # 做模型标记，后续用作聚类判断
                     'batch_size': 256,  # 预训练时的batch_size
                     'lr': 0.001,  # 预训练时的学习率
                     'alpha': 1.0,  # DEC时的alpha
@@ -64,6 +65,27 @@ class Config:
                     'p': 0.5,  #丢弃概率
                     'interval': 1  # DEC时的训练间隔
                 }
+                'SwinTransformer':{
+                    'model': 'SwinTransformer',  # 做模型标记，后续用作聚类判断
+                    'batch_size': 256,  # 预训练时的batch_size
+                    'lr': 0.001,  # 预训练时的学习率
+                    'alpha': 1.0,  # DEC时的alpha
+                    'n_epochs': 100,  # 预选连的epoch数
+                    'tol': 0.001,  # DEC时优化容忍度
+                    'update_interval': 1,  # DEC时的训练间隔
+                    'num_classes': 10,  # 在MNIST上
+                    'img_size:28, # MNIST图像大小
+                    'patch_size':2, # 输入图像分割成小块（patch）的大小
+                    'n_channels':1, # 输入图像的通道数
+                    'embed_dim':48, # 嵌入维度
+                    'window_size':7, # 局部注意力窗口的大小
+                    'mlp_ratio':4, #  MLP（多层感知机）部分中隐藏层的维度与嵌入维度之间的比率
+                    'drop_rate':0., # Dropout的概率
+                    'attn_drop_rate':0., # 注意力分数（权重）的Dropout概率
+                    'n_swin_blocks':(2, 2), # 每个层级的Swin Transformer块的数量
+                    'n_attn_heads':(2, 4), # 每个层级的注意力头的数量
+                    'n_z':96
+                }   
             },
             'Cifar10': {
                 'CAE': {
