@@ -46,6 +46,15 @@ def model(dataset, encoder, config):
                 alpha=config['alpha'],
                 n_clusters=config['n_clusters'],
             )
+        if encoder == 'VGG':
+            model = VGG(
+                conv1_outplanes=config['conv1_outplanes'],
+                conv2_outplanes=config['conv2_outplanes'],
+                conv3_outplanes=config['conv3_outplanes'],
+                conv4_outplanes=config['conv4_outplanes'],
+                hidden_size=config['hidden_size'],
+                p=config['p']
+            )
     if dataset =='Cifar10':
         if encoder == 'CAE':
             model = CAE(
