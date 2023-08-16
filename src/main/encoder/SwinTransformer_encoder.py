@@ -16,15 +16,10 @@ from torchvision.models.video.resnet import model_urls
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 
 
-batchsize = 256
-lr = 0.001
-n_input = 784
-
 '''
 SwinTransformer_encoder
 For MNIST data sets
 '''
-
 
 
 class Mlp(nn.Module):
