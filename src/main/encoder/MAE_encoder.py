@@ -13,6 +13,11 @@ from torch.utils.data import DataLoader
 from torch.nn import Linear
 
 
+'''
+MAE_encoder
+'''
+
+
 class PatchEmbed(nn.Module):  # 在MNIST上，[B, 1, 28, 28]->[B, 49, embed_dim]
     def __init__(self, img_size=(28, 28), patch_size=(4, 4), in_chans=1, embed_dim=16):
         super(PatchEmbed, self).__init__()
