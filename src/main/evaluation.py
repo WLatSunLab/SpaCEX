@@ -1,6 +1,11 @@
 import torch
 
-# Projections in 2D after Contrastive Learning, 25 epochs
+
+'''
+print a tsne dimensionality reduction image verifies whether the results of the embedding are meaningful
+'''
+
+
 def tsne_print(model, dataset, num, path):
     model.eval()
     projections = []
