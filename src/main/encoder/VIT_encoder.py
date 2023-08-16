@@ -14,48 +14,20 @@ from torch.utils.data import DataLoader
 from torch.nn import Linear
 from torchvision.models.video.resnet import model_urls
 
-batchsize = 256
-lr = 0.001
-n_input = 784
 
-'''VIT_encoder
-For MNIST data sets
+'''
+VIT_encoder
 '''
 
-'''Example
-import VIT
-from input_data import MnistDataset
-
-cuda = torch.cuda.is_available()
-print("use cuda: {}".format(cuda))
-device = torch.device("cuda" if cuda else "cpu")
-dataset = MnistDataset()
-model = VIT()
-model.to(device)
-model.pretrain(dataset)
-data = dataset.x
-y = dataset.y
-data = torch.Tensor(data).to(device)
-data=data.unsqueeze(1)
-x_bar, hidden = model(data)
-'''
 
 class PatchEmbed(nn.Module):
     def __init__(self, img_size=(28,28), patch_size=(7,7), in_chans=1, embed_dim=49):
         super(PatchEmbed,self).__init__()
-        # 原始大小为int，转为tuple，即：img_size原始输入224，变换后为[224,224]
-        #img_size = to_2tuple(img_size)
-        #patch_size = to_2tuple(patch_size)
-        # 图像块的个数
         num_patches = (img_size[1] // patch_size[1]) * \
             (img_size[0] // patch_size[0])
         self.img_size = img_size
         self.patch_size = patch_size
         self.num_patches = num_patches
-        # kernel_size=块大小，即每个块输出一个值，类似每个块展平后使用相同的全连接层进行处理
-        # 输入维度为3，输出维度为块向量长度
-        # 与原文中：分块、展平、全连接降维保持一致
-        # 输出为[B, C, H, W]
         self.proj = nn.Conv2d(
             in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
 
@@ -83,10 +55,10 @@ class MLP(nn.Module):
 
 class MSA(nn.Module):
     """
-    dim就是输入的维度，也就是embeding的宽度
-    heads是有多少个patch
-    dim_head是每个patch要多少dim
-    dropout是nn.Dropout()的参数
+    dim: the input dimension, which is the width of embeding
+    heads: how many patches there are
+    dim_head: the number of dim required for each patch
+    dropout: an argument to nn.Dropout()
     """
     def __init__(self, dim, heads=4, dim_head=7, dropout=0.,attn_drop=0.):
         super(MSA, self).__init__()
@@ -95,10 +67,9 @@ class MSA(nn.Module):
         self.dim_head=dim_head
         self.dropout = dropout
 
-        # 论文里面的Dh
         self.Dh = dim_head ** -0.5
 
-        # self-attention里面的Wq，Wk和Wv矩阵
+        # Wq, Wk, Wv in self-attention
         inner_dim = dim_head * heads
         self.inner_dim=inner_dim
         self.linear_q = nn.Linear(dim, inner_dim, bias=False)
@@ -112,16 +83,17 @@ class MSA(nn.Module):
 
     def forward(self, input):
         """
-        :param input: 输入是embeding，[batch, N, D]
-        :return: MSA的计算结果的维度和输入维度是一样的
+        param input: embeding，[batch, N, D]
+        return: shape is the same as the input
         """
 
-        # 首先计算q k v
+        # caculate q, k, v
         # [batch, N, inner_dim]
         q = self.linear_q(input)
         k = self.linear_k(input)
         v = self.linear_v(input)
-        # 转换为多头
+        
+        # multi-head
         new_shape = q.size()[:-1] + (self.heads, self.dim_head)
         q=q.view(new_shape)
         k=k.view(new_shape)
@@ -129,13 +101,14 @@ class MSA(nn.Module):
         q=torch.transpose(q,-3,-2)
         k=torch.transpose(k,-3,-2)
         v=torch.transpose(v,-3,-2) #[batch, head, N, head_size]
-        # 接着计算矩阵A
-
+        
+        # caculate matrix A
         A = torch.matmul(q, torch.transpose(k,-2,-1)) * self.Dh
         A = torch.softmax(A, dim=-1) # [batch,head, N, N]
         A = self.attn_drop(A)
         SA = torch.matmul(A, v)#[batch,head, N, head_size]
-        #多头拼接
+        
+        # Multi-head attention mechanism concatenation
         SA=torch.transpose(SA,-3,-2)#[batch, N,head, head_size]
         new_shape = SA.size()[:-2] + (self.inner_dim,)
         SA=SA.reshape(new_shape)# [batch, N, inner_dim]
@@ -162,6 +135,7 @@ class VIT_emb(nn.Module):
         super(VIT_emb, self).__init__()
         hidden_dim=4*dim
         self.emb=PatchEmbed()
+        
         # Position Embeddings
         self.pos_emb = nn.Parameter(torch.randn(1, num_patches, dim))
         self.layers = nn.ModuleList([])
@@ -177,12 +151,10 @@ class VIT_emb(nn.Module):
         x=self.emb(x)
 
         x = x + self.pos_emb[:, :x.size(1), :]  # (1, num_patches, embed_dim)
-        #x= nn.Dropout(0.9)(x)
         for layer in self.layers:
             x = layer(x)
         x = x.mean(dim=1)
-        #x=self.pic2pic_attn(x)
-        #x = self.mlp_head(x)
+
         return x
 
 
@@ -195,7 +167,6 @@ class VIT_coder(nn.Module):
 
         # encoder
         self.encoder = VIT_emb(16,49)
-
 
         # decoder
         self.decoder = nn.Sequential(
@@ -217,11 +188,9 @@ class VIT_coder(nn.Module):
     def forward(self, x):
 
         # encoder
-
         hidden = self.encoder(x)
 
         # decoder
-
         x_bar = self.decoder(hidden)
 
         return x_bar, hidden
