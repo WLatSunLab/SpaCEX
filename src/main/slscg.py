@@ -26,7 +26,8 @@ y_pred, acc_train, ari_train, nmi_train = DEC(model, dataset, config)
 eval = np.array([acc_train, ari_train, nmi_train])
 eval = eval.T
 eval = pd.DataFrame(eval, columns = ['acc', 'ari', 'nmi'])
-# 创建的目录
+
+# creat log folder
 path = "log/acc{}".format(eval['acc'].max())
 if not os.path.exists(path):
     os.mkdir(path)
@@ -34,5 +35,4 @@ tsne_print(model, dataset, num, path)
 
 eval.to_csv('{}eval.txt'.format(path),sep=' ')
 with open('{}eval.txt'.format(path), 'a', encoding='utf-8') as f:
-    # 将dic dumps json 格式进行写入
     f.write(json.dumps(config))
