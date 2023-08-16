@@ -21,7 +21,7 @@ class Config:
                     'bolck4_outplanes': 512,
                     'layers_num': 2,  # number of basicblock
                     'maxpool_dr': 1,  # Whether to use maxpooling
-                    'pool_bool': 0,  # 0 denote pooling，1 denote avg，2denote max
+                    'pool_bool': 0,  # 0 denote w/o pooling，1 denote avg，2 denote max
                     'n_init': 20,  # kmeans
                     'interval': 1  # interval in DEC
                 },
