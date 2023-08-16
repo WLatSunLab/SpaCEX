@@ -17,34 +17,14 @@ from torchvision.models.video.resnet import model_urls
 For MNIST data sets
 '''
 
-'''Example
-from encoder import CAE
-from input_data import MnistDataset
 
-cuda = torch.cuda.is_available()
-print("use cuda: {}".format(cuda))
-device = torch.device("cuda" if cuda else "cpu")
-dataset = MnistDataset()
-model = CAE()
-model.to(device)
-model.pretrain(dataset)
-data = dataset.x
-y = dataset.y
-data = torch.Tensor(data).to(device)
-data=data.unsqueeze(1)
-x_bar, hidden = model(data)
-'''
-
-
-def con3x3(in_planes, out_planes, stride=1):  # 不改变H和W大小
+def con3x3(in_planes, out_planes, stride=1):  
     "3x3 convolution with padding"
     return nn.Conv2d(in_channels=in_planes, out_channels=out_planes, kernel_size=3,
                      stride=stride,
                      padding=1, bias=False)
 
 
-# 定义BasicBlock
-# 定义BasicBlock
 class BasicBlock(nn.Module):
     expansion = 1
 
@@ -58,13 +38,12 @@ class BasicBlock(nn.Module):
         if dilation > 1:
             raise NotImplementedError("Dilation > 1 not supported in BasicBlock")
 
-        # 下面定义BasicBlock中的各个层
+        # Identify BasicBlock
         self.basic_num = basic_num
         self.conv1 = con3x3(inplanes, planes, stride)
         self.bn1 = norm_layer(planes)
-        # inplace为True表示进行原地操作，一般默认为False，表示新建一个变量存储操作
         self.relu = nn.ReLU(inplace=True)
-        self.conv2 = con3x3(planes, planes)  # 这一层不改变大小
+        self.conv2 = con3x3(planes, planes)  
         self.bn2 = norm_layer(planes)
         self.dowansample = downsaple
         self.stride = stride
@@ -81,7 +60,7 @@ class BasicBlock(nn.Module):
             out = self.conv2(out)
             out = self.bn2(out)
 
-        if self.dowansample is not None:  # 这是为了保证原始输入与卷积后的输出层叠加时维度相同
+        if self.dowansample is not None:  
             identity = self.dowansample(x)
 
         out = out + identity
@@ -99,11 +78,11 @@ class ResNet(nn.Module):
                  bolck3_outplanes=256,
                  bolck4_outplanes=512,
                  basic_num=2,
-                 layers_num=3,  # layers的层数，至少为1
-                 maxpool_dr=1,  # 0表示不用maxpooling降维
-                 pool_bool=0,  # 0表示不pooling，1表示avg，2表示max
+                 layers_num=3,  
+                 maxpool_dr=1,  
+                 pool_bool=0,  
                  ):
-        # layers=参数列表 block选择不同的类
+
         self.in_channels = in_channels
         self.inplanes = conv1_outplanes
         self.bolck1_outplanes = bolck1_outplanes
@@ -138,7 +117,7 @@ class ResNet(nn.Module):
         self.maxpool2_2 = nn.MaxPool2d(4)
         self.maxpool2_3 = nn.MaxPool2d(2)
 
-        # 初始化权重
+        # Initial weights
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
@@ -159,11 +138,9 @@ class ResNet(nn.Module):
         layers = []
         layers.append(block(self.inplanes, planes=planes, stride=stride,
                             downsaple=downsaple, basic_num=basic_num))
-        # 每个blocks的第一个residual结构保存在layers列表中。
         self.inplanes = planes * block.expansion
         for i in range(1, blocks):
             layers.append(block(self.inplanes, planes=planes, basic_num=basic_num))
-        # 该部分是将每个blocks的剩下residual 结构保存在layers列表中，这样就完成了一个blocks的构造。
 
         return nn.Sequential(*layers)
 
@@ -179,10 +156,10 @@ class ResNet(nn.Module):
         if self.layers_num >= 1:
             if self.pool_bool == 0:
                 n_z = self.bolck1_outplanes * 7 * 7
-            elif self.pool_bool == 1:  # 使用avgpool
+            elif self.pool_bool == 1: 
                 x = self.avgpool1(x)
                 n_z = self.bolck1_outplanes
-            elif self.pool_bool == 2:  # 使用maxpool
+            elif self.pool_bool == 2:  
                 x = self.maxpool2_1(x)
                 n_z = self.bolck1_outplanes
             if self.layers_num == 1:
@@ -192,10 +169,10 @@ class ResNet(nn.Module):
                 x = self.layer2(x)
                 if self.pool_bool == 0:
                     n_z = self.bolck2_outplanes * 4 * 4
-                elif self.pool_bool == 1:  # 使用avgpool
+                elif self.pool_bool == 1:  
                     x = self.avgpool2(x)
                     n_z = self.bolck2_outplanes
-                elif self.pool_bool == 2:  # 使用maxpool
+                elif self.pool_bool == 2: 
                     x = self.maxpool2_2(x)
                     n_z = self.bolck2_outplanes
                 if self.layers_num == 2:
@@ -205,10 +182,10 @@ class ResNet(nn.Module):
                     x = self.layer3(x)
                     if self.pool_bool == 0:
                         n_z = self.bolck3_outplanes * 2 * 2
-                    elif self.pool_bool == 1:  # 使用avgpool
+                    elif self.pool_bool == 1: 
                         x = self.avgpool3(x)
                         n_z = self.bolck3_outplanes
-                    elif self.pool_bool == 2:  # 使用maxpool
+                    elif self.pool_bool == 2: 
                         x = self.maxpool2_3(x)
                         n_z = self.bolck3_outplanes
                     if self.layers_num == 3:
@@ -218,8 +195,8 @@ class ResNet(nn.Module):
                         x = self.layer4(x)
                         if self.pool_bool == 0:
                             n_z = self.bolck4_outplanes * 1 * 1
-                            x = x.view(x.size(0), -1)  # 将输出结果展成一行
-                            return x, n_z  # 返回的应该是n_z的向量
+                            x = x.view(x.size(0), -1)
+                            return x, n_z 
 
 
 def resnet18(in_channels=1,
@@ -296,10 +273,10 @@ class CAE_coder(nn.Module):
                  bolck2_outplanes,
                  bolck3_outplanes,
                  bolck4_outplanes,
-                 layers_num,  # layers的层数，至少为1
-                 maxpool_dr,  # 0表示不用maxpooling降维
+                 layers_num,
+                 maxpool_dr,
                  pool_bool,
-                 n_z  # 0表示不pooling，1表示avg，2表示max
+                 n_z
                  ):
         super(CAE_coder, self).__init__()
 
@@ -372,8 +349,8 @@ class CAE(nn.Module):
                 bolck2_outplanes=128,
                 bolck3_outplanes=256,
                 bolck4_outplanes=512,
-                layers_num=3,  # layers的层数，至少为1
-                maxpool_dr=1,  # 0表示不用maxpooling降维
+                layers_num=3,
+                maxpool_dr=1, 
                 pool_bool=0,
                 alpha=1.0,
                 n_z=1024,
@@ -389,8 +366,8 @@ class CAE(nn.Module):
             bolck2_outplanes=bolck2_outplanes,
             bolck3_outplanes=bolck3_outplanes,
             bolck4_outplanes=bolck4_outplanes,
-            layers_num=layers_num,  # layers的层数，至少为1
-            maxpool_dr=maxpool_dr,  # 0表示不用maxpooling降维
+            layers_num=layers_num,
+            maxpool_dr=maxpool_dr, 
             pool_bool=pool_bool,
             n_z=n_z)
         # cluster layer
