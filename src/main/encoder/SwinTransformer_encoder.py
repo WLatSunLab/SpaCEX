@@ -18,7 +18,6 @@ from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 
 '''
 SwinTransformer_encoder
-For MNIST data sets
 '''
 
 
