@@ -6,12 +6,6 @@ from SwinTranformer_encoder import SwinTransformer
 
 '''
 driver.py is used for DataLoader and selection models
-'''
-#def dataload(dataset):
-    #train_loader = DataLoader(dataset, batch_size=256, shuffle=True)
-    #return train_loader
-
-'''
 Pass character type arguments as 'CAE'
 model = model('CAE')
 '''
