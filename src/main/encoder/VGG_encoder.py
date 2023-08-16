@@ -18,7 +18,6 @@ from torchvision.models.video.resnet import model_urls
 
 '''
 VGG_encoder
-For MNIST data sets
 '''
 
 
