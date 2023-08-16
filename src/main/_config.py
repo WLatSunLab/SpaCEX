@@ -5,65 +5,65 @@ class Config:
         config = {
             'MNIST': {
                 'CAE': {
-                    'model': 'CAE',  # 做模型标记，后续用作聚类判断
-                    'in_channels': 1,  # 在MNIST上Channel为1
-                    'batch_size': 256,  # 预训练时的batch_size
-                    'lr': 0.001,  # 预训练时的学习率
-                    'alpha': 1.0,  # DEC时的alpha
-                    'n_epochs': 20,  # 预训练的epoch数
-                    'tol': 0.001,  # DEC时优化容忍度
-                    'num_classes': 10,  # 在MNIST上
-                    'basic_num': 1,  # 决定basicblock上的卷积次数，至少为1
-                    'conv1_outplanes': 32,  # 初始卷积参数
+                    'model': 'CAE',  # used for clustering judgment
+                    'in_channels': 1,  # MNIST
+                    'batch_size': 256,  # batch_size in pre-training
+                    'lr': 0.001,  # learning rate in pre-training
+                    'alpha': 1.0,  # alpha in DEC
+                    'n_epochs': 20,  # epoch in pre-training
+                    'tol': 0.001,  # optimize tolerance in DEC
+                    'num_classes': 10,  # MNIST
+                    'basic_num': 1,  # number of convolutions
+                    'conv1_outplanes': 32,  # initial convolution
                     'bolck1_outplanes': 64,
                     'bolck2_outplanes': 128,
                     'bolck3_outplanes': 256,
                     'bolck4_outplanes': 512,
-                    'layers_num': 2,  # layers的层数，至少为1
-                    'maxpool_dr': 1,  # 0表示不用maxpooling降维
-                    'pool_bool': 0,  # 0表示不pooling，1表示avg，2表示max
-                    'n_init': 20,  # kmeans的初始参数
-                    'interval': 1  # DEC时的训练间隔
+                    'layers_num': 2,  # number of basicblock
+                    'maxpool_dr': 1,  # Whether to use maxpooling
+                    'pool_bool': 0,  # 0 denote pooling，1 denote avg，2denote max
+                    'n_init': 20,  # kmeans
+                    'interval': 1  # interval in DEC
                 },
                 'VIT': {},
                 'MAE': {
-                    'model': 'MAE',  # 做模型标记，后续用作聚类判断
-                    'batch_size': 256,  # dddd
-                    'lr': 0.01,  # dddd
-                    'n_epochs': 20,  # dddd
-                    'tol': 0.001,  # DEC时优化容忍度
-                    'num_classes': 10,  # 数据集类别，MNIST为10
-                    'img_size': (28, 28),  # 图像大小，MNIST为[28, 28]
-                    'patch_size': (4, 4),  #
-                    'in_chans': 1,  # 输入图像channel，MNIST为1
-                    'embed_dim': 16,  # 编码大小，指定为p**2*channel
-                    'depth': 5,  # 执行多少次Transformer
-                    'num_heads': 4,  # 多头注意力中的“头”
-                    'dim_head': 4,  # 多头注意力中每个“头”的维度
-                    'decoder_embed_dim': 16,  # 用于计算decoder时的位置嵌入
-                    'mlp_ratio': 5,  # Transformer中隐藏层维度倍数
-                    'norm_pix_loss': False,  # 是否执行归一化
-                    'alpha': 0.8,  # dddd
-                    'n_clusters': 10,
-                    'n_init': 20,
-                    'interval': 1  # DEC时的训练间隔
+                    'model': 'MAE',  # used for clustering judgment
+                    'batch_size': 256,  # batch_size in pre-training
+                    'lr': 0.01,  # leraning rate in pre-training
+                    'n_epochs': 20,  # epoch in pre-training
+                    'tol': 0.001,  # optimize tolerance in DEC
+                    'num_classes': 10,  # category, MNIST is 10
+                    'img_size': (28, 28),  # image size，MNIST is [28, 28]
+                    'patch_size': (4, 4),  # patch size, MNIST is [4, 4]
+                    'in_chans': 1,  # image channel, MNIST is 1
+                    'embed_dim': 16,  # embedding dim，p**2*channel
+                    'depth': 5,  # number of transformer
+                    'num_heads': 4,  # multi-head
+                    'dim_head': 4,  # head dim in multi-head attention
+                    'decoder_embed_dim': 16,  # positional embedding dim
+                    'mlp_ratio': 5,  # mlp_ratio*hidden dim in transformer
+                    'norm_pix_loss': False,  # wheather to normalize
+                    'alpha': 0.8,  # alpha in DEC
+                    'n_clusters': 10, # number of category, MNIST is 10
+                    'n_init': 20, # kmeans
+                    'interval': 1  # interval in DEC
                 },
                 'VGG':{
-                    'model': 'VGG',  # 做模型标记，后续用作聚类判断
-                    'batch_size': 256,  # 预训练时的batch_size
-                    'lr': 0.001,  # 预训练时的学习率
-                    'alpha': 1.0,  # DEC时的alpha
-                    'n_epochs': 100,  # 预选连的epoch数
-                    'tol': 0.001,  # DEC时优化容忍度
-                    'update_interval': 1,  # DEC时的训练间隔
-                    'num_classes': 10,  # 在MNIST上
-                    'conv1_outplanes': 64,  # 初始卷积参数
+                    'model': 'VGG',  # used for clustering judgement
+                    'batch_size': 256,  # batch size in pre-training
+                    'lr': 0.001,  # learning rate in pre-training
+                    'n_epochs': 100,  # epoch in pre-training
+                    'tol': 0.001,  # optimize tolerance in DEC
+                    'update_interval': 1,  # interval in DEC
+                    'num_classes': 10,  # number of category, MNIST is 10
+                    'conv1_outplanes': 64,  # initial convolution
                     'conv2_outplanes': 128,
                     'conv3_outplanes': 256,
                     'conv4_outplanes': 512,
-                    'hidden_size':512,  #分类器中隐藏层的单元数量
-                    'p': 0.5,  #丢弃概率
-                    'interval': 1  # DEC时的训练间隔
+                    'hidden_size':512,  # hidden dim
+                    'p': 0.5,  # rate of dropout
+                    'alpha': 1.0,  # alpha in DEC
+                    'interval': 1  # interbal
                 }
                 'SwinTransformer':{
                     'model': 'SwinTransformer',  # 做模型标记，后续用作聚类判断
