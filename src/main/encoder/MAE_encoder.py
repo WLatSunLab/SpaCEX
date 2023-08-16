@@ -19,13 +19,14 @@ class PatchEmbed(nn.Module):  # 在MNIST上，[B, 1, 28, 28]->[B, 49, embed_dim]
 
         self.img_size = img_size
         self.patch_size = patch_size
-        self.num_patches = (img_size[1] // patch_size[1]) * (img_size[0] // patch_size[0])  # 获取49个patch
-
-        # kernel_size=块大小，即每个块输出一个值，类似每个块展平后使用相同的全连接层进行处理
-        # 输入维度为3，输出维度为块向量长度
-        # 与原文中：分块、展平、全连接降维保持一致
-        # 输出为[B, C, H, W]
-        # 在MNIST上输出位[B, embed_dim, 7, 7]
+        self.num_patches = (img_size[1] // patch_size[1]) * (img_size[0] // patch_size[0])
+        
+        # kernel_size= Block size, that is, each block outputs a value, as if each block is flattened and processed using the same fully connected layer
+        # The input dimension is 3, and the output dimension is the block vector length
+        # Consistent with the original text: partition, flattening, full connection dimension reduction
+        # Output is [B, C, H, W]
+        # Output bits on MNIST [B, embed_dim, 7, 7]
+        
         self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
 
     def forward(self, x):
@@ -33,11 +34,11 @@ class PatchEmbed(nn.Module):  # 在MNIST上，[B, 1, 28, 28]->[B, 49, embed_dim]
         assert H == self.img_size[0] and W == self.img_size[1], \
             "Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
         # [B, C, H, W] -> [B, C, H*W] ->[B, H*W, C]
-        x = self.proj(x).flatten(2).transpose(2, 1)  # 在MNIST上为[B, 49, embed_dim]
+        x = self.proj(x).flatten(2).transpose(2, 1)
         return x
 
 
-class MLP(nn.Module):  # 简单的autoencoder，特征不变
+class MLP(nn.Module): 
     def __init__(self, dim, hidden_dim, dropout=0.):
         super(MLP, self).__init__()
         self.net = nn.Sequential(
@@ -55,10 +56,10 @@ class MLP(nn.Module):  # 简单的autoencoder，特征不变
 
 class MSA(nn.Module):
     """
-    dim就是输入的维度，也就是embeding的宽度
-    heads是有多少个patch
-    dim_head是每个patch要多少dim
-    dropout是nn.Dropout()的参数
+    dim is the input dimension, which is the width of embeding
+    heads is how many patches there are
+    dim_head is the number of dim required for each patch
+    dropout is an argument to nn.Dropout()
     """
 
     def __init__(self, dim, heads=4, dim_head=2, dropout=0., attn_drop=0., qkv_bias=False):
@@ -68,10 +69,9 @@ class MSA(nn.Module):
         self.dim_head = dim_head
         self.dropout = dropout
 
-        # 论文里面的Dh
         self.Dh = dim_head ** -0.5
 
-        # self-attention里面的Wq，Wk和Wv矩阵
+        # the Wq, Wk, and Wv matrices in self-attention
         inner_dim = dim_head * heads
         self.inner_dim = inner_dim
         self.linear_q = nn.Linear(dim, inner_dim, bias=qkv_bias)
@@ -85,16 +85,17 @@ class MSA(nn.Module):
 
     def forward(self, input):
         """
-        :param input: 输入是embeding，[batch, N, D]
-        :return: MSA的计算结果的维度和输入维度是一样的
+        param input: The input is embeding, [batch, N, D]
+        return: The dimension of the MSA result is the same as the input dimension
         """
 
-        # 首先计算q k v
+        # caculate q k v
         # [batch, N, inner_dim]
         q = self.linear_q(input)
         k = self.linear_k(input)
         v = self.linear_v(input)
-        # 转换为多头
+        
+        # switch to a multi-head attention mechanism
         new_shape = q.size()[:-1] + (self.heads, self.dim_head)
         q = q.view(new_shape)
         k = k.view(new_shape)
@@ -102,13 +103,14 @@ class MSA(nn.Module):
         q = torch.transpose(q, -3, -2)
         k = torch.transpose(k, -3, -2)
         v = torch.transpose(v, -3, -2)  # [batch, head, N, head_size]
-        # 接着计算矩阵A
 
+        # caculate matrix A
         A = torch.matmul(q, torch.transpose(k, -2, -1)) * self.Dh
         A = torch.softmax(A, dim=-1)  # [batch,head, N, N]
         A = self.attn_drop(A)
         SA = torch.matmul(A, v)  # [batch,head, N, head_size]
-        # 多头拼接
+        
+        # multi-head attention mechanism concatenation
         SA = torch.transpose(SA, -3, -2)  # [batch, N,head, head_size]
         new_shape = SA.size()[:-2] + (self.inner_dim,)
         SA = SA.reshape(new_shape)  # [batch, N, inner_dim]
@@ -183,7 +185,8 @@ def get_1d_sincos_pos_embed_from_grid(embed_dim, pos):
 
 
 class MAE_encoder(nn.Module):
-    """ Masked Autoencoder with VisionTransformer backbone
+    """ 
+    Masked Autoencoder with VisionTransformer backbone
     """
 
     def __init__(self,
@@ -331,16 +334,16 @@ class MAE_encoder(nn.Module):
 
     def forward_encoder(self, x, mask_ratio):
 
-        x = self.patch_embed(x)  # Bx1x28x28->Bx49xpatch_size**2x1
-        x = x + self.pos_embed[:, :, :]  # 获取位置编码
+        x = self.patch_embed(x)
+        x = x + self.pos_embed[:, :, :] 
         x1 = x.clone()
-        x, mask, ids_restore = self.random_masking(x, mask_ratio)  # 获取mask结果
+        x, mask, ids_restore = self.random_masking(x, mask_ratio) 
 
         for blk in self.blocks:
             x = blk(x)
         for blk in self.blocks:
             x1 = blk(x1)
-        return x1, x, mask, ids_restore  # 两次Transformer， 一次Transformer， mask编码
+        return x1, x, mask, ids_restore
 
     def forward_decoder(self, x, ids_restore):
         # embed tokens
@@ -348,8 +351,9 @@ class MAE_encoder(nn.Module):
 
         # append mask tokens to sequence
         mask_tokens = self.mask_token.repeat(x.shape[0], ids_restore.shape[1] - x.shape[1], 1)
-        x_ = torch.cat([x[:, :, :], mask_tokens], dim=1)  # no cls token
-        x = torch.gather(x_, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, x.shape[2]))  # unshuffle
+        x_ = torch.cat([x[:, :, :], mask_tokens], dim=1)
+        x = torch.gather(x_, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, x.shape[2]))
+        
         # add pos embed
         x = x + self.decoder_pos_embed
         x = x.mean(dim=1)
