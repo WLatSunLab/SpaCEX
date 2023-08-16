@@ -13,6 +13,7 @@ from torch.utils.data import DataLoader
 from torch.nn import Linear
 from torchvision.models.video.resnet import model_urls
 
+
 '''CAE_encoder
 For MNIST data sets
 '''
