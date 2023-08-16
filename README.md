@@ -6,12 +6,12 @@ We develop the **SLSCG** (**S**elf-supervised **L**earning on **S**patially **C*
 
 
 # Applicable tasks
-* Identifying spatially co-expressed and co-functional genes
-* 
+* Identify spatially co-expressed and co-functional genes.
+* Predict gene-gene interactions.
+* Detect spatially variable genes.
+* Cluster spatial spots into tissue domains
+
 
 In particular, you can adjust each parameter in the _config.py file, and run the adjusted model in the _try.py file which will create a folder belonging to the training in the log folder and output the acc,nmi,ari evaluation indicators in the training. It also outputs the hyperparameters used in the training and the result graph after T-SNE clustering on the Embedding
-# Result 
-<p align="center">
-  <img src="https://github.com/image-deep-clustering/SLSCG/blob/main/log/acc0.801.png?raw=true" width="800">
-</p>
+
 
