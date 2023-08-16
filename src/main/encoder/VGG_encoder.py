@@ -14,31 +14,14 @@ from torch.utils.data import DataLoader
 from torch.nn import Linear
 from torchvision.models.video.resnet import model_urls
 
-batchsize = 256
-lr = 0.001
-n_input = 784
 
-'''VGG_encoder
+
+'''
+VGG_encoder
 For MNIST data sets
 '''
 
-'''Example
-import VGG
-from input_data import MnistDataset
 
-cuda = torch.cuda.is_available()
-print("use cuda: {}".format(cuda))
-device = torch.device("cuda" if cuda else "cpu")
-dataset = MnistDataset()
-model = VGG()
-model.to(device)
-model.pretrain(dataset)
-data = dataset.x
-y = dataset.y
-data = torch.Tensor(data).to(device)
-data=data.unsqueeze(1)
-x_bar, hidden = model(data)
-'''
 
 class VGG_emb(nn.Module):  
     """
@@ -195,7 +178,15 @@ class VGG(nn.Module):
         self.alpha = 1.0
         self.pretrain_path = pretrain_path
 
-        self.vitae = VGG_coder(n_enc_1=n_enc_1,n_enc_2=n_enc_2,n_enc_3=n_enc_3,n_dec_1=n_dec_1,n_dec_2=n_dec_2,n_dec_3=n_dec_3,n_input=n_input,n_z=n_z)
+        self.vitae = VGG_coder(n_enc_1=n_enc_1,
+                               n_enc_2=n_enc_2,
+                               n_enc_3=n_enc_3,
+                               n_dec_1=n_dec_1,
+                               n_dec_2=n_dec_2,
+                               n_dec_3=n_dec_3,
+                               n_input=n_input,
+                               n_z=n_z)
+ 
         # cluster layer
         self.cluster_layer = Parameter(torch.Tensor(10, n_z))
         torch.nn.init.xavier_normal_(self.cluster_layer.data)
