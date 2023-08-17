@@ -12,26 +12,25 @@ from torch.optim import Adam
 from torch.utils.data import DataLoader
 from torch.nn import Linear
 
-
 '''
 MAE_encoder
 '''
 
 
-class PatchEmbed(nn.Module):  # 在MNIST上，[B, 1, 28, 28]->[B, 49, embed_dim]
-    def __init__(self, img_size=(28, 28), patch_size=(4, 4), in_chans=1, embed_dim=16):
+class PatchEmbed(nn.Module):  # 在MNIST上，[B, 1, 72, 59]->[B, 252, embed_dim]
+    def __init__(self, img_size=(72, 59), patch_size=(4, 4), in_chans=1, embed_dim=16):
         super(PatchEmbed, self).__init__()
 
         self.img_size = img_size
         self.patch_size = patch_size
         self.num_patches = (img_size[1] // patch_size[1]) * (img_size[0] // patch_size[0])
-        
+
         # kernel_size= Block size, that is, each block outputs a value, as if each block is flattened and processed using the same fully connected layer
         # The input dimension is 3, and the output dimension is the block vector length
         # Consistent with the original text: partition, flattening, full connection dimension reduction
         # Output is [B, C, H, W]
         # Output bits on MNIST [B, embed_dim, 7, 7]
-        
+
         self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
 
     def forward(self, x):
@@ -43,7 +42,7 @@ class PatchEmbed(nn.Module):  # 在MNIST上，[B, 1, 28, 28]->[B, 49, embed_dim]
         return x
 
 
-class MLP(nn.Module): 
+class MLP(nn.Module):
     def __init__(self, dim, hidden_dim, dropout=0.):
         super(MLP, self).__init__()
         self.net = nn.Sequential(
@@ -99,7 +98,7 @@ class MSA(nn.Module):
         q = self.linear_q(input)
         k = self.linear_k(input)
         v = self.linear_v(input)
-        
+
         # switch to a multi-head attention mechanism
         new_shape = q.size()[:-1] + (self.heads, self.dim_head)
         q = q.view(new_shape)
@@ -114,7 +113,7 @@ class MSA(nn.Module):
         A = torch.softmax(A, dim=-1)  # [batch,head, N, N]
         A = self.attn_drop(A)
         SA = torch.matmul(A, v)  # [batch,head, N, head_size]
-        
+
         # multi-head attention mechanism concatenation
         SA = torch.transpose(SA, -3, -2)  # [batch, N,head, head_size]
         new_shape = SA.size()[:-2] + (self.inner_dim,)
@@ -140,6 +139,7 @@ class Block(nn.Module):
         output_s2 = output + output_s1
         return output_s2
 
+
 # get positional embedding
 def get_2d_sincos_pos_embed(embed_dim, grid_size, cls_token=False):
     """
@@ -158,6 +158,7 @@ def get_2d_sincos_pos_embed(embed_dim, grid_size, cls_token=False):
         pos_embed = np.concatenate([np.zeros([1, embed_dim]), pos_embed], axis=0)
     return pos_embed
 
+
 def get_2d_sincos_pos_embed_from_grid(embed_dim, grid):
     assert embed_dim % 2 == 0
 
@@ -165,8 +166,9 @@ def get_2d_sincos_pos_embed_from_grid(embed_dim, grid):
     emb_h = get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[0])  # (H*W, D/2)
     emb_w = get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[1])  # (H*W, D/2)
 
-    emb = np.concatenate([emb_h, emb_w], axis=1) # (H*W, D)
+    emb = np.concatenate([emb_h, emb_w], axis=1)  # (H*W, D)
     return emb
+
 
 def get_1d_sincos_pos_embed_from_grid(embed_dim, pos):
     """
@@ -177,20 +179,20 @@ def get_1d_sincos_pos_embed_from_grid(embed_dim, pos):
     assert embed_dim % 2 == 0
     omega = np.arange(embed_dim // 2, dtype=np.float)
     omega /= embed_dim / 2.
-    omega = 1. / 10000**omega  # (D/2,)
+    omega = 1. / 10000 ** omega  # (D/2,)
 
     pos = pos.reshape(-1)  # (M,)
     out = np.einsum('m,d->md', pos, omega)  # (M, D/2), outer product
 
-    emb_sin = np.sin(out) # (M, D/2)
-    emb_cos = np.cos(out) # (M, D/2)
+    emb_sin = np.sin(out)  # (M, D/2)
+    emb_cos = np.cos(out)  # (M, D/2)
 
     emb = np.concatenate([emb_sin, emb_cos], axis=1)  # (M, D)
     return emb
 
 
 class MAE_encoder(nn.Module):
-    """ 
+    """
     Masked Autoencoder with VisionTransformer backbone
     """
 
@@ -232,17 +234,19 @@ class MAE_encoder(nn.Module):
         self.decoder = nn.Sequential(
             nn.Linear(embed_dim, 128),
             nn.ReLU(True),
-            nn.Linear(128, 3 * 3 * 32),
+            nn.Linear(128, 9 * 7 * 32),
             nn.ReLU(True),
-            nn.Unflatten(dim=1, unflattened_size=(32, 3, 3)),
+            nn.Unflatten(dim=1, unflattened_size=(32, 9, 7)),
             nn.ConvTranspose2d(32, 16, 3, stride=2, output_padding=0),
             nn.BatchNorm2d(16),
             nn.ReLU(True),
             nn.ConvTranspose2d(16, 8, 3, stride=2, padding=1, output_padding=1),
             nn.BatchNorm2d(8),
             nn.ReLU(True),
-            nn.ConvTranspose2d(8, 1, 3, stride=2, padding=1, output_padding=1)
+            nn.ConvTranspose2d(8, 1, 3, stride=2, padding=1, output_padding=1),
+            nn.Upsample(size=([72, 59]))
         )
+        
 
         # --------------------------------------------------------------------------
 
@@ -285,12 +289,12 @@ class MAE_encoder(nn.Module):
     def patchify(self, imgs):
         """
         imgs: (N, 1, H, W)
-        x: (N, L, patch_size**2 *3)
+        x: (N, L, patch_size**2 *1)
         """
         p = self.patch_embed.patch_size[0]  # 4
-        h = imgs.shape[2] // p  # 7
-        w = imgs.shape[3] // p  # 7
-        imgs = imgs[:, :, :h * p, :w * p]  # [:, :, :28, :28]
+        h = imgs.shape[2] // p  # 18
+        w = imgs.shape[3] // p  # 14
+        imgs = imgs[:, :, :h * p, :w * p]  # [:, :, :18, :14]
         x = imgs.reshape(shape=(imgs.shape[0], 1, h, p, w, p))
         x = torch.einsum('nchpwq->nhwpqc', x)
         x = x.reshape(shape=(imgs.shape[0], h * w, p ** 2 * 1))  # 在这里emb_dim=16
@@ -298,14 +302,14 @@ class MAE_encoder(nn.Module):
 
     def unpatchify(self, x):
         """
-        x: (N, L, patch_size**2 *3)
-        imgs: (N, 3, H, W)
+        x: (N, L, patch_size**2 *1)
+        imgs: (N, 1, H, W)
         """
         p = self.patch_embed.patch_size[0]
         h = w = int(x.shape[1] ** .5)
         assert h * w == x.shape[1]
 
-        x = x.reshape(shape=(x.shape[0], h, w, p, p, 3))
+        x = x.reshape(shape=(x.shape[0], h, w, p, p, 1))
         x = torch.einsum('nhwpqc->nchpwq', x)
         imgs = x.reshape(shape=(x.shape[0], 1, h * p, h * p))
         return imgs
@@ -340,9 +344,9 @@ class MAE_encoder(nn.Module):
     def forward_encoder(self, x, mask_ratio):
 
         x = self.patch_embed(x)
-        x = x + self.pos_embed[:, :, :] 
+        x = x + self.pos_embed[:, :, :]
         x1 = x.clone()
-        x, mask, ids_restore = self.random_masking(x, mask_ratio) 
+        x, mask, ids_restore = self.random_masking(x, mask_ratio)
 
         for blk in self.blocks:
             x = blk(x)
@@ -358,13 +362,14 @@ class MAE_encoder(nn.Module):
         mask_tokens = self.mask_token.repeat(x.shape[0], ids_restore.shape[1] - x.shape[1], 1)
         x_ = torch.cat([x[:, :, :], mask_tokens], dim=1)
         x = torch.gather(x_, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, x.shape[2]))
-        
+
         # add pos embed
         x = x + self.decoder_pos_embed
-        x = x.mean(dim=1)
+        x = x.mean(dim=1)  # 32x16
         x = self.decoder(x)
 
-        return x.reshape((x.shape[0], ids_restore.shape[1], -1))
+        #return x.reshape((x.shape[0], ids_restore.shape[1], -1))
+        return self.patchify(x)
 
     def forward_loss(self, imgs, pred, mask):
         """
@@ -391,10 +396,11 @@ class MAE_encoder(nn.Module):
         z = whole_latent.mean(dim=1)
         return z, loss, pred, mask
 
+
 class MAE(nn.Module):
 
     def __init__(self,
-                 img_size=(28, 28),
+                 img_size=(72, 59),
                  patch_size=(4, 4),
                  in_chans=1,
                  embed_dim=16,
@@ -410,19 +416,19 @@ class MAE(nn.Module):
         super(MAE, self).__init__()
         self.alpha = alpha
         self.pretrain_path = pretrain_path
-        self.mae =MAE_encoder(
-                img_size=img_size,
-                patch_size=patch_size,
-                in_chans=in_chans,
-                embed_dim=embed_dim,
-                depth=depth,
-                num_heads=num_heads,
-                dim_head=dim_head,
-                decoder_embed_dim=decoder_embed_dim,
-                mlp_ratio=mlp_ratio,
-                norm_pix_loss=norm_pix_loss)
+        self.mae = MAE_encoder(
+            img_size=img_size,
+            patch_size=patch_size,
+            in_chans=in_chans,
+            embed_dim=embed_dim,
+            depth=depth,
+            num_heads=num_heads,
+            dim_head=dim_head,
+            decoder_embed_dim=decoder_embed_dim,
+            mlp_ratio=mlp_ratio,
+            norm_pix_loss=norm_pix_loss)
         # cluster layer
-        self.cluster_layer = Parameter(torch.Tensor(n_clusters, patch_size[0]**2))
+        self.cluster_layer = Parameter(torch.Tensor(n_clusters, patch_size[0] ** 2))
         torch.nn.init.xavier_normal_(self.cluster_layer.data)
 
     def pretrain(self, dataset, batch_size, lr, pretrain=True):
@@ -433,44 +439,48 @@ class MAE(nn.Module):
         print('load pretrained mae from', self.pretrain_path)
 
     def forward(self, x):
-
         z, loss, x_bar, mask = self.mae(x)
         # cluster
         q = 1.0 / (1.0 + torch.sum(
             torch.pow(z.unsqueeze(1) - self.cluster_layer, 2), 2) / self.alpha)
         q = q.pow((self.alpha + 1.0) / 2.0)
         q = (q.t() / torch.sum(q, 1)).t()
-        return x_bar, q, loss
+        return x_bar, z, loss
 
 
 def target_distribution(q):
-    weight = q**2 / q.sum(0)
+    weight = q ** 2 / q.sum(0)
     return (weight.t() / weight.sum(1)).t()
 
 
 def pretrain_mae(model, dataset, batch_size, lr):
-    train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-    print(model)
     cuda = torch.cuda.is_available()
     device = torch.device("cuda" if cuda else "cpu")
+    batch_size = batch_size
+    data = torch.Tensor(dataset).to(device)
+    x = data.unsqueeze(1)
+    n_batch = x.size(0) // batch_size + 1
     optimizer = Adam(model.parameters(), lr=lr)
-    for epoch in range(100):
+    for epoch in range(50):
         total_loss = 0.
-        for batch_idx, (x, _, _) in enumerate(train_loader):
-            x = x.to(device)
+        new_idx = torch.randperm(x.size()[0])
+        for batch in range(n_batch):
+            if batch < n_batch - 1:
+                idx = new_idx[batch * batch_size:(batch + 1) * batch_size]
+            else:
+                idx = new_idx[batch * batch_size:]
+            idx = idx.to(device)
+
+            x_train = x[idx, :, :, :].to(device)
 
             optimizer.zero_grad()
-            z,loss,x_bar,_  = model(x)
-            #loss = F.mse_loss(x_bar, x)
+            z, loss, _, _ = model(x_train)
+            # loss = F.mse_loss(x_bar, x_train)
             total_loss += loss.item()
 
             loss.backward()
             optimizer.step()
-
         print("epoch {} loss={:.4f}".format(epoch,
-                                            total_loss / (batch_idx + 1)))
+                                            total_loss / (batch + 1)))
         torch.save(model.state_dict(), 'mae_mnist.pkl')
     print("model saved to {}.".format('mae_mnist.pkl'))
-
-
-
