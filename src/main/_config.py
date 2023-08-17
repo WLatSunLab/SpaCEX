@@ -3,6 +3,38 @@
 class Config:
     def __init__(self,  dataset='MNIST', model='MAE'):
         config = {
+            'Gene image': {
+                'MAE': {
+                    'model': 'MAE',  # used for clustering judgment
+                    'batch_size': 32,  # batch_size in pre-training
+                    'lr': 0.01,  # leraning rate in pre-training
+                    'n_epochs': 20,  # epoch in pre-training
+                    'tol': 0.001,  # optimize tolerance in DEC
+                    'num_classes': 10,  # category, dlpfc is 10
+                    'img_size': (72, 59),  # image size，dlpfc is [28, 28]
+                    'patch_size': (4, 4),  # patch size, dlpfc is [4, 4]
+                    'in_chans': 1,  # image channel, dlpfc is 1
+                    'embed_dim': 16,  # embedding dim，p**2*channel
+                    'depth': 5,  # number of transformer
+                    'num_heads': 4,  # multi-head
+                    'dim_head': 4,  # head dim in multi-head attention
+                    'decoder_embed_dim': 16,  # positional embedding dim
+                    'mlp_ratio': 5,  # ratio between the hidden dimension and the embedded dimension
+                    'norm_pix_loss': False,  # wheather to normalize
+                    'alpha': 0.8,  # alpha in DEC
+                    'n_clusters': 10,  # number of category, dlpfc is 10
+                    'n_init': 20,  # kmeans
+                    'interval': 1,  # interval in DEC
+                    'gamma': 0.1,  # coefficient of clustering loss
+                    'l1': 0.1,  # coefficient of nega-likelihood loss
+                    'l2': 0.1,  # coefficient of nega-seperate loss
+                    'l3': 0.1,  # coefficient of nega-seperate loss
+                    'l4': 0.1,  # coefficient of nega-size loss
+                    'l5': 0.1,  # coefficient of sigma loss
+                    'l6': 1  # coefficient of reconstrctive loss
+
+                }
+            },
             'MNIST': {
                 'CAE': {
                     'model': 'CAE',  # used for clustering judgment
@@ -59,11 +91,11 @@ class Config:
                     'conv2_outplanes': 128,
                     'conv3_outplanes': 256,
                     'conv4_outplanes': 512,
-                    'hidden_size':512,  # hidden dim
+                    'hidden_size': 512,  # hidden dim
                     'p': 0.5,  # rate of dropout
                     'alpha': 1.0,  # alpha in DEC
                     'interval': 1  # interval in DEC
-                }
+                },
                 'SwinTransformer':{
                     'model': 'SwinTransformer',  # used for clustering judgement
                     'batch_size': 256,  # batch size in pre-training
@@ -71,7 +103,7 @@ class Config:
                     'n_epochs': 100,  # epoch in pre-training
                     'tol': 0.001,  # optimize tolerance in DEC
                     'num_classes': 10,  # number of category, MNIST is 10
-                    'img_size:28, # image size
+                    'img_size': 28, # image size
                     'patch_size':2, # patch size
                     'n_channels':1, # channel of image
                     'embed_dim':48, # embedding dim
@@ -83,7 +115,7 @@ class Config:
                     'n_attn_heads':(2, 4), # number of attention head in each layer
                     'alpha': 1.0,  # alpha in DEC
                     'n_z':96
-                }   
+                }
             },
             'Cifar10': {
                 'CAE': {
