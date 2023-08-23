@@ -5,6 +5,10 @@ We develop the **SpaCEX** which utilize self-supervised learning on spatially co
 </p>
 
 
+[slscg.pdf](https://github.com/image-deep-clustering/SpaCEX/files/12414874/slscg.pdf)
+
+
+
 # Applicable tasks
 * Identify spatially co-expressed and co-functional genes.
 * Predict gene-gene interactions.
