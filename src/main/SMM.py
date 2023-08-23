@@ -1,9 +1,9 @@
 import torch
 import numpy as np
 from sympy.stats import Gamma
+from sklearn.cluster import KMeans
 from torch.distributions import MultivariateNormal
 import torch.distributions.multivariate_normal as mvn
-from sklearn.cluster import KMeans
 
 
 def calculate_S_mle_k(X, Omega_ik, x_k):
@@ -27,8 +27,8 @@ def calculate_xi(X, Theta_updated):
     for j in range(K):
         dist = mvn.MultivariateNormal(Theta_updated[j]['mu'], Theta_updated[j]['sigma'])  # creat phi
         xi[:, j] = Theta_updated[j]['pai'] * dist.log_prob(X).exp()
-    xi = torch.where(xi != torch.inf, xi, torch.ones((len(X), K)))  # outlier process
-    xi = torch.where(torch.isnan(xi), torch.zeros((len(X), K)), xi)  # outlier process
+    #xi = torch.where(xi != torch.inf, xi, torch.ones((len(X), K)))  # outlier process
+    #xi = torch.where(torch.isnan(xi), torch.zeros((len(X), K)), xi)  # outlier process
     xi = torch.abs(xi)
     xi_sum = torch.sum(xi, dim=1)
     xi = (xi + 1e-6) / (xi_sum.unsqueeze(1) + 1e-6)
@@ -81,6 +81,7 @@ def calculate_x_k(X, k, Omega):
     
     return x_k
 
+
 def caculate_v_k(v, k, xi, zeta):
     xi_k = xi[:, k]
     zeta_k = zeta[:, k]
@@ -125,27 +126,11 @@ def initialize_SMM_parameters(X, K, alpha0, kappa0, rho0):
     alpha0_hat = alpha0 * torch.ones(K)
     m0_hat = m0 
     kappa0_hat = kappa0
-
-    # Calculate S_mle_k for each cluster
-    S_mle_k_list = []
-    for k in range(K):
-        xi_i_k = calculate_xi(X, Theta)
-        
-        Omega = calculate_Omega(X, Theta)
-        Omega_ik = Omega[:, k]
-        x_k = calculate_x_k(X, k, Omega)
-        S_mle_k = calculate_S_mle_k(X, Omega_ik, x_k)
-        S_mle_k_list.append(S_mle_k)
-
-    # Update S0_hat using S_mle_k
     S0_hat = S0
     rho0_hat = rho0
 
     return Theta, alpha0_hat, m0_hat, kappa0_hat, S0_hat, rho0_hat, cluster_labels
 
-
-import torch
-from torch.distributions import MultivariateNormal
 
 
 def update_SMM_parameters(X, Theta_prev, alpha0_hat, m0_hat, kappa0_hat, S0_hat, rho0_hat):
@@ -165,10 +150,10 @@ def update_SMM_parameters(X, Theta_prev, alpha0_hat, m0_hat, kappa0_hat, S0_hat,
         
         N_ik = p_ik*q_ik
         N_k = torch.sum(p_ik*q_ik)
-        if torch.isnan(N_k):
-            N_k = 0
-        if torch.isinf(N_k):
-            N_k = 1
+        #if torch.isnan(N_k):
+            #N_k = 0
+        #if torch.isinf(N_k):
+            #N_k = 1
         x_bar_k = torch.matmul(N_ik, X) / (N_k + 1e-6)
         
         kappa_k = kappa0_hat + N_k
@@ -181,8 +166,8 @@ def update_SMM_parameters(X, Theta_prev, alpha0_hat, m0_hat, kappa0_hat, S0_hat,
         S_k = S0_hat + S_mle_k
         rho_k = rho0_hat + torch.sum(p_ik)
 
-        if torch.isnan(S_k).any() or torch.isinf(S_k).any():
-            continue
+        #if torch.isnan(S_k).any() or torch.isinf(S_k).any():
+            #continue
         
         v = Theta_prev[k]['v']
         Theta_prev[k]['mu'] = m_k
@@ -194,12 +179,13 @@ def update_SMM_parameters(X, Theta_prev, alpha0_hat, m0_hat, kappa0_hat, S0_hat,
     return Theta_prev
 
 
+
 def estimate_initial_sigma(X):
     X_mean = torch.mean(X, dim=0, keepdim=True)
     X_centered = X - X_mean
     cov_matrix = torch.matmul(X_centered.t(), X_centered)
     initial_sigma = torch.mean(torch.diagonal(cov_matrix))
-    # return initial_sigma.item()
+    
     return initial_sigma
 
 
