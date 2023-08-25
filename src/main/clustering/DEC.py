@@ -18,8 +18,41 @@ from torch.utils.data import DataLoader
 def target_distribution(q):
     weight = q**2 / q.sum(0)
     return (weight.t() / weight.sum(1)).t()
+    
+def patchify(imgs):
+    """
+    imgs: (N, 1, H, W)
+    x: (N, L, patch_size**2 *1)
+    """
+    p = 4  # 4
+    h = imgs.shape[2] // p  # 18
+    w = imgs.shape[3] // p  # 14
+    imgs = imgs[:, :, :h * p, :w * p]  # [:, :, :18, :14]
+    x = imgs.reshape(shape=(imgs.shape[0], 1, h, p, w, p))
+    x = torch.einsum('nchpwq->nhwpqc', x)
+    x = x.reshape(shape=(imgs.shape[0], h * w, p ** 2 * 1))  # 在这里emb_dim=16
+    return x
 
+def caculate_rloss(imgs, pred, mask):
+    """
+    imgs: [N, 3, H, W]
+    pred: [N, L, p*p*1]
+    mask: [N, L], 0 is keep, 1 is remove,
+    """
+    target = patchify(imgs)
+    norm_pix_loss = False
+    if norm_pix_loss:
+        mean = target.mean(dim=-1, keepdim=True)
+        var = target.var(dim=-1, keepdim=True)
+        target = (target - mean) / (var + 1.e-6) ** .5
 
+    loss = (pred - target) ** 2
+    loss = loss.mean(dim=-1)  # [N, L], mean loss per patch
+    loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
+
+    return loss
+
+    
 def cluster_acc(y_true, y_pred):
     """
     Calculate clustering accuracy. Require scikit-learn installed
@@ -60,7 +93,27 @@ def DEC(model, dataset, total, config):
     data = torch.Tensor(data).to(device)
     n_batch = data.size(0) // batch_size + 1
     data = data.unsqueeze(1)
-    x_bar, z, rloss = model(data)
+
+    batch_size = 16
+    total_samples = len(dataset)
+    x_bar_part = []
+    z_part = []
+    mask_part = []
+    with torch.no_grad():
+        for i in range(0, total_samples, batch_size):
+            batch_data = data[i:i+batch_size]  # Get a batch of data
+            batch_data = torch.Tensor(batch_data).to(device)
+            batch_result_x_bar, batch_result_z, _, batch_result_mask = model(batch_data)
+
+            x_bar_part.append(batch_result_x_bar)
+            z_part.append(batch_result_z)
+            mask_part.append(batch_result_mask)
+
+    # Concatenate the results along the batch dimension
+    x_bar = torch.cat(x_bar_part, dim=0)
+    z = torch.cat(z_part, dim=0)
+    mask = torch.cat(mask_part, dim=0)
+
 
 
     model.train()
