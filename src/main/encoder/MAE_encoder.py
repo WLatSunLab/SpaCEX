@@ -445,7 +445,7 @@ class MAE(nn.Module):
             torch.pow(z.unsqueeze(1) - self.cluster_layer, 2), 2) / self.alpha)
         q = q.pow((self.alpha + 1.0) / 2.0)
         q = (q.t() / torch.sum(q, 1)).t()
-        return x_bar, z, loss
+        return x_bar, z, loss, mask
 
 
 def target_distribution(q):
