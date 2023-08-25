@@ -27,34 +27,7 @@ def EM_algorithm(X, K,
     xi_i_k_history = [xi_i_k] 
 
     for i in range(max_iterations):
-        #p_ik = calculate_xi(X, Theta_prev)
-
-        # Update mu
-        #mu_k = calculate_mu(X, p_ik)
-
-        # Update sigma
-        #sigma_k = calculate_sigma(X, p_ik, mu_k)
-
-        # Update v
-        #v_k = calculate_v(X, p_ik)
-
-        # Update pai
-        # pai_k = calculate_pai(xi_i_k, p_ik)
-
-        # Update Theta
-        #for k in range(len(Theta_prev)):
-            #Theta_prev[k]['mu'] = mu_k[k]
-
-            #Theta_prev[k]['sigma'] = torch.abs(torch.diag(torch.diag(sigma_k[k]) + 1e-6))
-            #Theta_prev[k]['sigma'] = torch.where(torch.isnan(Theta_prev[k]['sigma']), torch.eye(X.size(1)),
-                                                 #Theta_prev[k]['sigma'])
-
-            #Theta_prev[k]['v'] = v_k[k]
-            # Theta_prev[k]['pai'] = pai_k[k]
-
         Theta_prev = update_SMM_parameters(X, Theta_prev, alpha0_hat, m0_hat, kappa0_hat, S0_hat, rho0_hat)  # 更新参数
-        # for the in Theta_prev:
-        # print(the['pai'])
         clusters_new = assign_clusters(X, Theta_prev)
 
         # Tolerance discrimination
