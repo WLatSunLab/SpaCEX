@@ -412,7 +412,7 @@ class MAE(nn.Module):
                  norm_pix_loss=False,
                  alpha=1,
                  n_clusters=10,
-                 pretrain_path='mae_mnist.pkl'):
+                 pretrain_path='mae_gene.pkl'):
         super(MAE, self).__init__()
         self.alpha = alpha
         self.pretrain_path = pretrain_path
@@ -461,7 +461,7 @@ def pretrain_mae(model, dataset, batch_size, lr):
     x = data.unsqueeze(1)
     n_batch = x.size(0) // batch_size + 1
     optimizer = Adam(model.parameters(), lr=lr)
-    for epoch in range(50):
+    for epoch in range(5):
         total_loss = 0.
         new_idx = torch.randperm(x.size()[0])
         for batch in range(n_batch):
@@ -482,5 +482,5 @@ def pretrain_mae(model, dataset, batch_size, lr):
             optimizer.step()
         print("epoch {} loss={:.4f}".format(epoch,
                                             total_loss / (batch + 1)))
-        torch.save(model.state_dict(), 'mae_mnist.pkl')
-    print("model saved to {}.".format('mae_mnist.pkl'))
+        torch.save(model.state_dict(), 'mae_gene.pkl')
+    print("model saved to {}.".format('mae_gene.pkl'))
