@@ -8,6 +8,16 @@ import numpy as np
 import json
 import os
 
+'''
+What you should input
+dataset: gene image data with size [N, 1, 72, 59]
+total: Gene similarity matrix with size [N, N]
+
+What you will get return
+model: encoder that haved been trained
+y_pred: label that SpaCEX generative
+embedding: embedding that generatived by encoder
+'''
 
 class SpaCEX():
     def train(dataset, total):
