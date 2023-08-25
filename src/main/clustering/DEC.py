@@ -8,9 +8,9 @@ from sklearn.metrics.cluster import normalized_mutual_info_score as nmi_score
 from sklearn.metrics import adjusted_rand_score as ari_score
 from torch.optim import Adam
 from torch.nn.parameter import Parameter
-from SMM import initialize_SMM_parameters
-from EM import EM_algorithm
-from LH import likelihood, regularization, size
+from SpaCEX.src.main.SMM import initialize_SMM_parameters
+from SpaCEX.src.main.EM import EM_algorithm
+from SpaCEX.src.main.LH import likelihood, regularization, size
 from torch.utils.data import DataLoader
 
 
@@ -224,4 +224,4 @@ def DEC(model, dataset, total, config):
                                             total_loss / (batch + 1)))
         print('kl_loss:', total_kl_loss / (batch + 1), 'reconstr_loss:', total_reconstr_loss / (batch + 1), 'reg_loss:',
               total_reg_loss / (batch + 1))
-    return y_pred_last
+    return y_pred_last, z
