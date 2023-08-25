@@ -1,8 +1,8 @@
 import torch
 from scipy.stats import mvn
-from SMM import update_SMM_parameters
-from SMM import calculate_xi
-from SMM import calculate_mu
+from SpaCEX.src.main.SMM import update_SMM_parameters
+from SpaCEX.src.main.SMM import calculate_xi
+from SpaCEX.src.main.SMM import calculate_mu
 
 
 def assign_clusters(X, Theta_updated):
