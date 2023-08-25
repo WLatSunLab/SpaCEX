@@ -4,15 +4,14 @@ We develop the **SpaCEX** which utilize self-supervised learning on spatially co
   <img src="https://github.com/Shaw-Lab/SpaCEX/assets/121435520/97d5e386-5606-49a3-8b7e-4a3b1a921c4e.png" width="900">
 </p>
 
-
-
-
-
-
-
-
 # Applicable tasks
 * Identify spatially co-expressed and co-functional genes.
 * Predict gene-gene interactions.
 * Detect spatially variable genes.
 * Cluster spatial spots into tissue domains
+
+# Getting Started
+```bash
+git clone https://github.com/WLatSunLab/SpaCEX.git
+cd SpaCEX
+```
