@@ -17,6 +17,9 @@ What you will get return
 model: encoder that haved been trained
 y_pred: label that SpaCEX generative
 embedding: embedding that generatived by encoder
+
+Others
+If you wanna get other return such as x_bar or parameters of SMM, just rewrite DEC to get what you want.
 '''
 
 class SpaCEX():
