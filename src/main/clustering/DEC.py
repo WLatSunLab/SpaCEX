@@ -35,7 +35,7 @@ def patchify(imgs):
 
 def caculate_rloss(imgs, pred, mask):
     """
-    imgs: [N, 3, H, W]
+    imgs: [N, 1, H, W]
     pred: [N, L, p*p*1]
     mask: [N, L], 0 is keep, 1 is remove,
     """
@@ -94,7 +94,7 @@ def DEC(model, dataset, total, config):
     n_batch = data.size(0) // batch_size + 1
     data = data.unsqueeze(1)
 
-    batch_size = 16
+    batch_size = 64
     total_samples = len(dataset)
     x_bar_part = []
     z_part = []
@@ -113,6 +113,7 @@ def DEC(model, dataset, total, config):
     x_bar = torch.cat(x_bar_part, dim=0)
     z = torch.cat(z_part, dim=0)
     mask = torch.cat(mask_part, dim=0)
+    rloss = caculate_rloss(data, x_bar, mask)
 
 
 
@@ -122,7 +123,28 @@ def DEC(model, dataset, total, config):
     kappa0 = 0.0000
     rho0 = config['embed_dim'] + 2
     K = config['num_classes']
-    x_bar, z, rloss = model(data)
+
+    # get embedding and rloss via all data
+    batch_size = 64
+    total_samples = len(dataset)
+    x_bar_part = []
+    z_part = []
+    mask_part = []
+    with torch.no_grad():
+        for i in range(0, total_samples, batch_size):
+            batch_data = data[i:i+batch_size]  # Get a batch of data
+            batch_data = torch.Tensor(batch_data).to(device)
+            batch_result_x_bar, batch_result_z, _, batch_result_mask = model(batch_data)
+
+            x_bar_part.append(batch_result_x_bar)
+            z_part.append(batch_result_z)
+            mask_part.append(batch_result_mask)
+    # Concatenate the results along the batch dimension
+    x_bar = torch.cat(x_bar_part, dim=0)
+    z = torch.cat(z_part, dim=0)
+    mask = torch.cat(mask_part, dim=0)
+    rloss = caculate_rloss(data, x_bar, mask)
+
     n_z = config['embed_dim']
     jmu = Parameter(torch.Tensor(K, n_z))
     torch.nn.init.xavier_normal_(jmu.data)
@@ -144,7 +166,26 @@ def DEC(model, dataset, total, config):
         for epoch in range(0):
             total_loss = 0.
 
-            x_bar, z, rloss = model(data)
+            # get embedding and rloss via all data
+            batch_size = 64
+            total_samples = len(dataset)
+            x_bar_part = []
+            z_part = []
+            mask_part = []
+            with torch.no_grad():
+                for i in range(0, total_samples, batch_size):
+                    batch_data = data[i:i+batch_size]  # Get a batch of data
+                    batch_data = torch.Tensor(batch_data).to(device)
+                    batch_result_x_bar, batch_result_z, _, batch_result_mask = model(batch_data)
+
+                    x_bar_part.append(batch_result_x_bar)
+                    z_part.append(batch_result_z)
+                    mask_part.append(batch_result_mask)
+            # Concatenate the results along the batch dimension
+            x_bar = torch.cat(x_bar_part, dim=0)
+            z = torch.cat(z_part, dim=0)
+            mask = torch.cat(mask_part, dim=0)
+            rloss = caculate_rloss(data, x_bar, mask)
             Theta_updated, clusters, xi_i_k_history = EM_algorithm(z, K, Theta_prev, alpha0_hat, m0_hat, kappa0_hat,
                                                                    S0_hat, rho0_hat, clusters,
                                                                    max_iterations=5,  config=config, tol=5 * 1e-3)
@@ -195,7 +236,26 @@ def DEC(model, dataset, total, config):
         # with torch.autograd.detect_anomaly():
         if epoch % config['interval'] == 0:
 
-            x_bar, z, rloss = model(data)
+                # get embedding and rloss via all data
+            batch_size = 64
+            total_samples = len(dataset)
+            x_bar_part = []
+            z_part = []
+            mask_part = []
+            with torch.no_grad():
+                for i in range(0, total_samples, batch_size):
+                    batch_data = data[i:i+batch_size]  # Get a batch of data
+                    batch_data = torch.Tensor(batch_data).to(device)
+                    batch_result_x_bar, batch_result_z, _, batch_result_mask = model(batch_data)
+
+                    x_bar_part.append(batch_result_x_bar)
+                    z_part.append(batch_result_z)
+                    mask_part.append(batch_result_mask)
+            # Concatenate the results along the batch dimension
+            x_bar = torch.cat(x_bar_part, dim=0)
+            z = torch.cat(z_part, dim=0)
+            mask = torch.cat(mask_part, dim=0)
+            rloss = caculate_rloss(data, x_bar, mask)
             Theta_prev, clusters, xi_i_k_history = EM_algorithm(z, K, Theta_prev, alpha0_hat, m0_hat, kappa0_hat,
                                                                 S0_hat, rho0_hat, clusters,
                                                                 max_iterations=5, config=config, tol=5 * 1e-3)
@@ -231,7 +291,26 @@ def DEC(model, dataset, total, config):
             lap_mat1 = lap_mat[idx, :]
             lap_mat1 = lap_mat1[:, idx]
 
-            x_bar, z, rloss = model(x_train)
+                # get embedding and rloss via all data
+            batch_size = 64
+            total_samples = len(dataset)
+            x_bar_part = []
+            z_part = []
+            mask_part = []
+            with torch.no_grad():
+                for i in range(0, total_samples, batch_size):
+                    batch_data = data[i:i+batch_size]  # Get a batch of data
+                    batch_data = torch.Tensor(batch_data).to(device)
+                    batch_result_x_bar, batch_result_z, _, batch_result_mask = model(batch_data)
+
+                    x_bar_part.append(batch_result_x_bar)
+                    z_part.append(batch_result_z)
+                    mask_part.append(batch_result_mask)
+            # Concatenate the results along the batch dimension
+            x_bar = torch.cat(x_bar_part, dim=0)
+            z = torch.cat(z_part, dim=0)
+            mask = torch.cat(mask_part, dim=0)
+            rloss = caculate_rloss(data, x_bar, mask)
             _, _, xi_i_k_history = EM_algorithm(z, K, Theta_prev, alpha0_hat, m0_hat, kappa0_hat, S0_hat, rho0_hat,
                                                 clusters[idx], max_iterations=0, config=config, tol=5 * 1e-3)
 
