@@ -1,5 +1,5 @@
-from CAE_encoder import CAE
-from MAE_encoder import MAE
+from SpaCEX.src.main.encoder.CAE_encoder import CAE
+from SpaCEX.src.main.encoder.MAE_encoder import MAE
 
 
 '''
