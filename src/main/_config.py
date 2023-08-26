@@ -10,7 +10,7 @@ class Config:
                     'lr': 0.01,  # leraning rate in pre-training
                     'n_epochs': 20,  # epoch in pre-training
                     'tol': 0.001,  # optimize tolerance in DEC
-                    'num_classes': 10,  # category, dlpfc is 10
+                    'num_classes': 500,  # category, dlpfc is 500
                     'img_size': (72, 59),  # image size，dlpfc is [28, 28]
                     'patch_size': (4, 4),  # patch size, dlpfc is [4, 4]
                     'in_chans': 1,  # image channel, dlpfc is 1
@@ -22,7 +22,7 @@ class Config:
                     'mlp_ratio': 5,  # ratio between the hidden dimension and the embedded dimension
                     'norm_pix_loss': False,  # wheather to normalize
                     'alpha': 0.8,  # alpha in DEC
-                    'n_clusters': 10,  # number of category, dlpfc is 10
+                    'n_clusters': 500,  # number of category, dlpfc is 500
                     'n_init': 20,  # kmeans
                     'interval': 1,  # interval in DEC
                     'gamma': 0.1,  # coefficient of clustering loss
