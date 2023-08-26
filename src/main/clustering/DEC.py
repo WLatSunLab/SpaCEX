@@ -356,4 +356,4 @@ def DEC(model, dataset, total, config):
                                             total_loss / (batch + 1)))
         print('kl_loss:', total_kl_loss / (batch + 1), 'reconstr_loss:', total_reconstr_loss / (batch + 1), 'reg_loss:',
               total_reg_loss / (batch + 1))
-    return y_pred_last, z
+    return y_pred_last, z, model
