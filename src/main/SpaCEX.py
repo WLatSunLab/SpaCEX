@@ -11,7 +11,7 @@ import os
 '''
 What you should input
 dataset: gene image data with size [N, 1, 72, 59]
-total: Gene similarity matrix with size [N, N]
+total: gene similarity matrix with size [N, N]
 
 What you will get return
 model: encoder that haved been trained
