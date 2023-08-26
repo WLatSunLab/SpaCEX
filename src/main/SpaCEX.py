@@ -31,7 +31,7 @@ class SpaCEX():
         model = driver.model('Gene image', 'MAE', config)
         model.to(device)
         model.pretrain(dataset, batch_size=config['batch_size'], lr=config['lr'])
-        y_pred, embedding= DEC(model, dataset, total, config)
+        y_pred, embedding, model= DEC(model, dataset, total, config)
 
-        return model, y_pred, embedding
+        return y_pred, embedding, model
 
