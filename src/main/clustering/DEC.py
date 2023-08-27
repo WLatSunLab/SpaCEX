@@ -209,7 +209,7 @@ def DEC(model, dataset, total, config):
             break
 
         likeli_loss = likelihood(q, jpai)
-
+        z = z.to(device)
         reg_loss = regularization(z, lap_mat)
         size_loss = size(q)
 
@@ -296,7 +296,7 @@ def DEC(model, dataset, total, config):
             lap_mat1 = lap_mat[idx, :]
             lap_mat1 = lap_mat1[:, idx]
 
-                # get embedding and rloss via all data
+            # get embedding and rloss via all data
             batch_size = 64
             total_samples = len(dataset)
             x_bar_part = []
@@ -329,15 +329,16 @@ def DEC(model, dataset, total, config):
                 jpai.data[j] = torch.tensor(theta['pai'].detach().numpy())
                 jv.data[j] = torch.tensor(theta['v'].detach().numpy())
                 j += 1
-
-            kl_loss = F.kl_div(q.log(), p[idx])
+            kl_loss = F.kl_div(q.log(), p)
             reconstr_loss = rloss
-            reg_loss = regularization(z,lap_mat1)
+            z = z.to(device)
+            reg_loss = regularization(z,lap_mat)
             # update encoder
             loss = config['gamma'] * kl_loss + config['l6'] * reconstr_loss + config['l3'] * math.e ** (-(epoch + 10) / 3) * reg_loss
             #loss = reconstr_loss
 
             optimizer.zero_grad()
+            loss.requires_grad_(True)
             loss.backward(retain_graph=True)
             optimizer.step()
             # update SMM
