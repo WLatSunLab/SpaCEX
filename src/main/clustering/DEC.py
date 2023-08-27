@@ -1,254 +1,366 @@
 import torch
+import math
 import numpy as np
-from sympy.stats import Gamma
+import torch.nn.functional as F
 from sklearn.cluster import KMeans
-from torch.distributions import MultivariateNormal
-import torch.distributions.multivariate_normal as mvn
+from scipy.optimize import linear_sum_assignment as linear_assignment
+from sklearn.metrics.cluster import normalized_mutual_info_score as nmi_score
+from sklearn.metrics import adjusted_rand_score as ari_score
+from torch.optim import Adam
+from torch.nn.parameter import Parameter
+from SpaCEX.src.main.SMM import initialize_SMM_parameters
+from SpaCEX.src.main.EM import EM_algorithm
+from SpaCEX.src.main.LH import likelihood, regularization, size
+from torch.utils.data import DataLoader
 
 
-def calculate_S_mle_k(X, Omega_ik, x_k):
-    N = X.shape[0]
-    D = X.shape[1]
-    S_mle_k = torch.ones(D, D)
-    x_k_reshaped = x_k.view(-1, X.shape[1])
-    X_minus_mu = X - x_k_reshaped
-    for i in range(N):
-        S_mle_k+=Omega_ik[i]*torch.mm(X_minus_mu[i,:].reshape(D, 1), X_minus_mu[i,:].reshape(D, 1).t())
+
+def target_distribution(q):
+    weight = q**2 / q.sum(0)
+    return (weight.t() / weight.sum(1)).t()
     
-    # the weighted average sum of the mean-centered covariance matrix
-    S_mle_k = torch.mm(X_minus_mu.t(), X_minus_mu)
+def patchify(imgs):
+    """
+    imgs: (N, 1, H, W)
+    x: (N, L, patch_size**2 *1)
+    """
+    p = 4  # 4
+    h = imgs.shape[2] // p  # 18
+    w = imgs.shape[3] // p  # 14
+    imgs = imgs[:, :, :h * p, :w * p]  # [:, :, :18, :14]
+    x = imgs.reshape(shape=(imgs.shape[0], 1, h, p, w, p))
+    x = torch.einsum('nchpwq->nhwpqc', x)
+    x = x.reshape(shape=(imgs.shape[0], h * w, p ** 2 * 1))  # 在这里emb_dim=16
+    return x
+
+def caculate_rloss(imgs, pred, mask):
+    """
+    imgs: [N, 1, H, W]
+    pred: [N, L, p*p*1]
+    mask: [N, L], 0 is keep, 1 is remove,
+    """
+    target = patchify(imgs)
+    norm_pix_loss = False
+    if norm_pix_loss:
+        mean = target.mean(dim=-1, keepdim=True)
+        var = target.var(dim=-1, keepdim=True)
+        target = (target - mean) / (var + 1.e-6) ** .5
+
+    loss = (pred - target) ** 2
+    loss = loss.mean(dim=-1)  # [N, L], mean loss per patch
+    loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
+
+    return loss
+
     
-    return S_mle_k
+def cluster_acc(y_true, y_pred):
+    """
+    Calculate clustering accuracy. Require scikit-learn installed
+    # Arguments
+        y: true labels, numpy.array with shape `(n_samples,)`
+        y_pred: predicted labels, numpy.array with shape `(n_samples,)`
+    # Return
+        accuracy, in [0,1]
+    """
+    y_true = y_true.astype(np.int64)
+    assert y_pred.size == y_true.size
+    D = max(y_pred.max(), y_true.max()) + 1
+    w = np.zeros((D, D), dtype=np.int64)
+    for i in range(y_pred.size):
+        w[y_pred[i], y_true[i]] += 1
+    ind = (np.array(linear_assignment(w.max() - w))).transpose()
+    return sum([w[i, j] for i, j in ind]) * 1.0 / y_pred.size
 
 
-def calculate_xi(X, Theta_updated):
-    K = len(Theta_updated)  # the number of clusters
-    xi = torch.zeros((len(X), K))  # init xi[N, K]
-    for j in range(K):
-        dist = mvn.MultivariateNormal(Theta_updated[j]['mu'], Theta_updated[j]['sigma'])  # creat phi
-        xi[:, j] = Theta_updated[j]['pai'] * dist.log_prob(X).exp()
-    xi = torch.where(xi != torch.inf, xi, torch.ones((len(X), K)))  # outlier process
-    xi = torch.where(torch.isnan(xi), torch.zeros((len(X), K)), xi)  # outlier process
-    xi = torch.abs(xi)
-    xi_sum = torch.sum(xi, dim=1)
-    xi = (xi + 1e-6) / (xi_sum.unsqueeze(1) + 1e-6)
+def DEC(model, dataset, total, config):
 
-    return xi
+    #  model.pretrain('data/ae_mnist.pkl')
+    #model.pretrain(path='')
+
+    batch_size = config['batch_size']
+    cuda = torch.cuda.is_available()
+    device = torch.device("cuda" if cuda else "cpu")
+
+    # Graph regularization
+    A = torch.Tensor(total).to(device)
+    d = 1.0 / torch.sqrt(torch.abs(A.sum(axis=1)))
+    D_inv = torch.diag(d)
+    lap_mat = torch.diag(torch.sign(A.sum(axis=1))) - D_inv @ A @ D_inv
+
+    # cluster parameter initiate
+    data = dataset
+
+    data = torch.Tensor(data).to(device)
+    n_batch = data.size(0) // batch_size + 1
+    data = data.unsqueeze(1)
+
+    batch_size = 64
+    total_samples = len(dataset)
+    x_bar_part = []
+    z_part = []
+    mask_part = []
+    with torch.no_grad():
+        for i in range(0, total_samples, batch_size):
+            batch_data = data[i:i+batch_size]  # Get a batch of data
+            batch_data = torch.Tensor(batch_data).to(device)
+            batch_result_x_bar, batch_result_z, _, batch_result_mask = model(batch_data)
+
+            x_bar_part.append(batch_result_x_bar)
+            z_part.append(batch_result_z)
+            mask_part.append(batch_result_mask)
+
+    # Concatenate the results along the batch dimension
+    x_bar = torch.cat(x_bar_part, dim=0)
+    z = torch.cat(z_part, dim=0)
+    mask = torch.cat(mask_part, dim=0)
+    rloss = caculate_rloss(data, x_bar, mask)
 
 
-def calaculate_sigma(X, Theta_updated):
-    K = len(Theta_updated)
-    D = X.shape[1]
-    sigma = torch.zeros(X.shape[0], K)
-    for i in range(X.shape[0]):
-        x_i = X[i].unsqueeze(dim=1)
-        for k in range(K):
-            sigma[i][k] = torch.mm(torch.mm((x_i-Theta_updated[k]['mu'].unsqueeze(dim=1)).t(), 
-                                  torch.inverse(Theta_updated[k]['sigma'])), 
-                                   (x_i-Theta_updated[k]['mu'].unsqueeze(dim=1)))
-            
-    return sigma
 
+    model.train()
+    # Set the remaining variables based on prior knowledge or assumptions
+    alpha0 = 1.
+    kappa0 = 0.0000
+    rho0 = config['embed_dim'] + 2
+    K = config['num_classes']
+
+    # get embedding and rloss via all data
+    batch_size = 64
+    total_samples = len(dataset)
+    x_bar_part = []
+    z_part = []
+    mask_part = []
+    with torch.no_grad():
+        for i in range(0, total_samples, batch_size):
+            batch_data = data[i:i+batch_size]  # Get a batch of data
+            batch_data = torch.Tensor(batch_data).to(device)
+            batch_result_x_bar, batch_result_z, _, batch_result_mask = model(batch_data)
+
+            x_bar_part.append(batch_result_x_bar)
+            z_part.append(batch_result_z)
+            mask_part.append(batch_result_mask)
+    # Concatenate the results along the batch dimension
+    x_bar = torch.cat(x_bar_part, dim=0)
+    z = torch.cat(z_part, dim=0)
+    mask = torch.cat(mask_part, dim=0)
+    rloss = caculate_rloss(data, x_bar, mask)
+
+    n_z = config['embed_dim']
+    jmu = Parameter(torch.Tensor(K, n_z))
+    torch.nn.init.xavier_normal_(jmu.data)
+    jsig = Parameter(torch.Tensor(K, n_z, n_z))
+    torch.nn.init.xavier_normal_(jsig.data)
+    jpai = Parameter(torch.Tensor(K, 1))
+    torch.nn.init.xavier_normal_(jpai.data)
+    jv = Parameter(torch.Tensor(K, 1))
+    torch.nn.init.xavier_normal_(jv.data)
+    z = z.to('cpu')
+    #K = K.to('device')
+    #alpha0 = alpha0.to('device')
+    Theta_prev, alpha0_hat, m0_hat, kappa0_hat, S0_hat, rho0_hat, clusters = initialize_SMM_parameters(z, K, alpha0,
+                                                                                                       kappa0, rho0)
+    y_pred_last = clusters
+
+    optimizer = Adam(model.parameters(), lr=config['lr'])
+    optimizer1 = Adam([jmu, jsig, jpai, jv], lr=config['lr'])
     
-def calculate_zeta(X, Theta_updated, sigma):
-    D = X.shape[1]
-    K = len(Theta_updated)
-    zeta = torch.zeros((len(X), K))  # init zeta[N, K]
-    for i in range(X.shape[0]):
-        for k in range(K):
-            zeta[i][k] = (Theta_updated[k]['v']+D)/(Theta_updated[k]['v']+sigma[i][k])
-    
-    return zeta
+    # if 1:
+    for epoch in range(50):
+        total_loss = 0.
 
+        # get embedding and rloss via all data
+        batch_size = 64
+        total_samples = len(dataset)
+        x_bar_part = []
+        z_part = []
+        mask_part = []
+        with torch.no_grad():
+            for i in range(0, total_samples, batch_size):
+                batch_data = data[i:i+batch_size]  # Get a batch of data
+                batch_data = torch.Tensor(batch_data).to(device)
+                batch_result_x_bar, batch_result_z, _, batch_result_mask = model(batch_data)
 
-def calculate_Omega(X, Theta_updated):
-    xi = calculate_xi(X, Theta_updated)
-    sigma = calaculate_sigma(X, Theta_updated)
-    zeta = calculate_zeta(X, Theta_updated, sigma)
-    Omega = torch.mul(xi, zeta)
-    
-    return Omega
-    
+                x_bar_part.append(batch_result_x_bar)
+                z_part.append(batch_result_z)
+                mask_part.append(batch_result_mask)
+        # Concatenate the results along the batch dimension
+        x_bar = torch.cat(x_bar_part, dim=0)
+        z = torch.cat(z_part, dim=0)
+        mask = torch.cat(mask_part, dim=0)
+        rloss = caculate_rloss(data, x_bar, mask)
+        z = z.to('cpu')
+        Theta_updated, clusters, xi_i_k_history = EM_algorithm(z, K, Theta_prev, alpha0_hat, m0_hat, kappa0_hat,
+                                                                S0_hat, rho0_hat, clusters,
+                                                                max_iterations=5,  config=config, tol=5 * 1e-3)
 
-def calculate_x_k(X, k, Omega):
-    Omega_k = torch.sum(Omega[:, k])
-    tem1 = torch.ones(1, X.shape[1])
-    for i in range(X.shape[0]):
-        tem2 = torch.ones(1, X.shape[1])*Omega[i, k]
-        tem1 = torch.cat((tem1, tem2), dim=0)
-    tem1 = tem1[1:, :].sum(dim=0)
-    x_k = tem1/Omega_k
-    
-    return x_k
+        q = torch.tensor(xi_i_k_history[-1])
+        j = 0
+        for theta in Theta_updated:
+            jpai.data[j] = torch.tensor(theta['pai'].detach().numpy())
+            j += 1
 
+        # evaluate clustering performance
+        y_pred = clusters
+        delta_label = torch.sum(y_pred != y_pred_last) / y_pred.size(0)
+        y_pred_last = y_pred
+        if epoch > 0 and delta_label < config['tol']:
+            print('delta_label {:.4f}'.format(delta_label), '< tol', config['tol'])
+            print('Reached tolerance threshold. Stopping training.')
+            break
 
-def caculate_v_k(v, k, xi, zeta):
-    xi_k = xi[:, k]
-    zeta_k = zeta[:, k]
-    der = 0
-    for i in range(xi_k.shape[0]):
-        der += xi_k[i]*(0.5*torch.log(v/2)+0.5-0.5*torch.digamma(v/2)+0.5*(torch.log(zeta_k[i])-zeta_k[i]))
-    
-    return v - 0.001*der
-    
-    
-def initialize_SMM_parameters(X, K, alpha0, kappa0, rho0):
-    # Convert samples to NumPy array for K-means clustering
-    X_np = X.detach().numpy()
+        likeli_loss = likelihood(q, jpai)
 
-    # Perform K-means clustering on the data
-    kmeans = KMeans(n_clusters=K, n_init=20)
-    cluster_labels = kmeans.fit_predict(X_np)
+        reg_loss = regularization(z, lap_mat)
+        size_loss = size(q)
 
-    # Convert cluster labels back to PyTorch tensor
-    cluster_labels = torch.tensor(cluster_labels, dtype=torch.long)
-    D = X.shape[1]
-    N = X.shape[0]
-    Theta = []
+        reconstr_loss = rloss
+        # update encoder
+        loss = - config['l1'] * likeli_loss + config['l3'] * math.e ** (
+                    -epoch / 3) * reg_loss - config['l4'] * size_loss + config['l6'] * reconstr_loss
 
-    # Convert K-means estimated parameters to the desired format
-    for k in range(K):
-        theta_k = {}
-        theta_k['pai'] = torch.tensor(1.0 / K)
-        theta_k['mu'] = torch.tensor(kmeans.cluster_centers_[k], dtype=torch.float32)
+        #loss = reconstr_loss
+        optimizer.zero_grad()
+        loss.backward(retain_graph=True)
+        optimizer.step()
 
-        cluster_samples = X[cluster_labels == k]  # [N_cluste, D]
-        theta_k['sigma'] = torch.diag(
-            torch.diag(torch.tensor(torch.cov(cluster_samples.T), dtype=torch.float32)) + 1e-6)
-        if cluster_samples.size(0) < 2:
-            theta_k['sigma'] = torch.eye(D) * 1e-6
-        theta_k['v'] = torch.tensor(3.0)
-        Theta.append(theta_k)
+        total_loss = loss.item()
+        total_likeli_loss = likeli_loss.item()
 
-    m0 = torch.tensor(kmeans.cluster_centers_, dtype=torch.float32).mean()
-    S0 = K**(-1/D)*torch.diag(torch.diag(torch.mm((X-X/N).t(), X-X/N)) + 1e-6)
+        total_reg_loss = reg_loss.item()
+        total_size_loss = size_loss.item()
 
-    alpha0_hat = alpha0 * torch.ones(K)
-    m0_hat = m0 
-    kappa0_hat = kappa0
-    S0_hat = S0
-    rho0_hat = rho0
+        total_reconstr_loss = reconstr_loss.item()
+        print("epoch {} loss={:.4f}".format(epoch + 1,
+                                                total_loss))
+        print('likeli_loss:', total_likeli_loss, 'reg_loss:', total_reg_loss, 'size_loss:', total_size_loss,
+                  'reconstr_loss:', total_reconstr_loss)
+        Theta_prev = Theta_updated
 
-    return Theta, alpha0_hat, m0_hat, kappa0_hat, S0_hat, rho0_hat, cluster_labels
+    for epoch in range(50):
+        # with torch.autograd.detect_anomaly():
+        if epoch % config['interval'] == 0:
 
+                # get embedding and rloss via all data
+            batch_size = 64
+            total_samples = len(dataset)
+            x_bar_part = []
+            z_part = []
+            mask_part = []
+            with torch.no_grad():
+                for i in range(0, total_samples, batch_size):
+                    batch_data = data[i:i+batch_size]  # Get a batch of data
+                    batch_data = torch.Tensor(batch_data).to(device)
+                    batch_result_x_bar, batch_result_z, _, batch_result_mask = model(batch_data)
 
+                    x_bar_part.append(batch_result_x_bar)
+                    z_part.append(batch_result_z)
+                    mask_part.append(batch_result_mask)
+            # Concatenate the results along the batch dimension
+            x_bar = torch.cat(x_bar_part, dim=0)
+            z = torch.cat(z_part, dim=0)
+            mask = torch.cat(mask_part, dim=0)
+            rloss = caculate_rloss(data, x_bar, mask)
+            z = z.to('cpu')
+            Theta_prev, clusters, xi_i_k_history = EM_algorithm(z, K, Theta_prev, alpha0_hat, m0_hat, kappa0_hat,
+                                                                S0_hat, rho0_hat, clusters,
+                                                                max_iterations=5, config=config, tol=5 * 1e-3)
 
-def update_SMM_parameters(X, Theta_prev, alpha0_hat, m0_hat, kappa0_hat, S0_hat, rho0_hat):
-    K = len(Theta_prev)
-    D = X.shape[1]
-    
-    sigma = calaculate_sigma(X, Theta_prev)
-    xi_i_k = calculate_xi(X, Theta_prev)
-    zeta_i_k = calculate_zeta(X, Theta_prev, sigma)
+            # update target distribution p
+            tmp_q = xi_i_k_history[-1].data
+            p = target_distribution(tmp_q)
 
-    alpha_k = calculate_alpha_k(xi_i_k, alpha0_hat)
-    alpha_k = (alpha_k - 1) / (alpha_k.sum() - K + 1e-6)
-    for k in range(K):
+            # evaluate clustering performance
+            y_pred = clusters.cpu().detach().numpy()
+            delta_label = np.sum(y_pred != y_pred_last).astype(np.float32) / y_pred.shape[0]
+            y_pred_last = y_pred
 
-        p_ik = xi_i_k[:, k]
-        q_ik = zeta_i_k[:, k]
-        
-        N_ik = p_ik*q_ik
-        N_k = torch.sum(p_ik*q_ik)
-        if torch.isnan(N_k):
-            N_k = 0
-        if torch.isinf(N_k):
-            N_k = 1
-        x_bar_k = torch.matmul(N_ik, X) / (N_k + 1e-6)
-        
-        kappa_k = kappa0_hat + N_k
-        m_k = (kappa0_hat * m0_hat + N_k * x_bar_k) / (kappa_k)
-        
-        # 
-        Omega = calculate_Omega(X, Theta_prev)
-        Omega_ik = Omega[:, k]
-        S_mle_k = calculate_S_mle_k(X, Omega_ik, x_bar_k)
-        S_k = S0_hat + S_mle_k
-        rho_k = rho0_hat + torch.sum(p_ik)
+            if epoch > 0 and delta_label < config['tol']:
+                print('delta_label {:.4f}'.format(delta_label), '< tol', config['tol'])
+                print('Reached tolerance threshold. Stopping training.')
+                break
 
-        #if torch.isnan(S_k).any() or torch.isinf(S_k).any():
-            #continue
-        
-        v = Theta_prev[k]['v']
-        Theta_prev[k]['mu'] = m_k
-        Theta_prev[k]['sigma'] = S_k / (rho_k+D+2)
-        Theta_prev[k]['sigma'] = torch.abs(torch.diag(torch.diag(Theta_prev[k]['sigma']) + 1e-6))
-        Theta_prev[k]['v'] = caculate_v_k(Theta_prev[k]['v'], k, xi_i_k, zeta_i_k)
-        Theta_prev[k]['pai'] = alpha_k[k]
+        total_loss = 0.
+        total_kl_loss = 0.
+        total_reconstr_loss = 0.
+        total_reg_loss = 0.
 
-    return Theta_prev
+        new_idx = torch.randperm(data.size()[0])
+        for batch in range(n_batch):
+            if batch < n_batch - 1:
+                idx = new_idx[batch * batch_size:(batch + 1) * batch_size]
+            else:
+                idx = new_idx[batch * batch_size:]
 
+            x_train = data[idx, :, :, :]
 
+            lap_mat1 = lap_mat[idx, :]
+            lap_mat1 = lap_mat1[:, idx]
 
-def estimate_initial_sigma(X):
-    X_mean = torch.mean(X, dim=0, keepdim=True)
-    X_centered = X - X_mean
-    cov_matrix = torch.matmul(X_centered.t(), X_centered)
-    initial_sigma = torch.mean(torch.diagonal(cov_matrix))
-    
-    return initial_sigma
+                # get embedding and rloss via all data
+            batch_size = 64
+            total_samples = len(dataset)
+            x_bar_part = []
+            z_part = []
+            mask_part = []
+            with torch.no_grad():
+                for i in range(0, total_samples, batch_size):
+                    batch_data = data[i:i+batch_size]  # Get a batch of data
+                    batch_data = torch.Tensor(batch_data).to(device)
+                    batch_result_x_bar, batch_result_z, _, batch_result_mask = model(batch_data)
 
+                    x_bar_part.append(batch_result_x_bar)
+                    z_part.append(batch_result_z)
+                    mask_part.append(batch_result_mask)
+            # Concatenate the results along the batch dimension
+            x_bar = torch.cat(x_bar_part, dim=0)
+            z = torch.cat(z_part, dim=0)
+            mask = torch.cat(mask_part, dim=0)
+            rloss = caculate_rloss(data, x_bar, mask)
+            z = z.to('cpu')
+            _, _, xi_i_k_history = EM_algorithm(z, K, Theta_prev, alpha0_hat, m0_hat, kappa0_hat, S0_hat, rho0_hat,
+                                                clusters[idx], max_iterations=0, config=config, tol=5 * 1e-3)
 
-def calculate_log_Gamma(X, xi_i_k, Theta):
-    K = len(Theta)
-    log_Gamma = []
+            q = torch.tensor(xi_i_k_history[0])
 
-    for k in range(K):
-        mu_k = Theta[k]['mu']
-        sigma_k = Theta[k]['sigma']
-        v_k = Theta[k]['v']
+            j = 0
+            for theta in Theta_prev:
+                jmu.data[j] = torch.tensor(theta['mu'].detach().numpy())
+                jsig.data[j] = torch.tensor(theta['sigma'].detach().numpy())
+                jpai.data[j] = torch.tensor(theta['pai'].detach().numpy())
+                jv.data[j] = torch.tensor(theta['v'].detach().numpy())
+                j += 1
 
-        log_gamma_k = -0.5 * torch.logdet(2 * np.pi * sigma_k) - 0.5 * torch.matmul((X - mu_k.reshape(1, -1)),
-                                                                                    torch.inverse(sigma_k)).matmul(
-            (X - mu_k.reshape(1, -1)).T) + torch.log(v_k * xi_i_k[:, k].mean())
-        log_Gamma.append(log_gamma_k)
+            kl_loss = F.kl_div(q.log(), p[idx])
+            reconstr_loss = rloss
+            reg_loss = regularization(z,lap_mat1)
+            # update encoder
+            loss = config['gamma'] * kl_loss + config['l6'] * reconstr_loss + config['l3'] * math.e ** (-(epoch + 10) / 3) * reg_loss
+            #loss = reconstr_loss
 
-    return torch.stack(log_Gamma)
+            optimizer.zero_grad()
+            loss.backward(retain_graph=True)
+            optimizer.step()
+            # update SMM
+            loss1 = kl_loss.requires_grad_(True)
 
+            optimizer1.zero_grad()
+            loss1.backward(retain_graph=True)
+            optimizer1.step()
 
-def calculate_mu(X, p_ik):
-    p_ik_t = p_ik.t()
-    numerator = torch.mm(p_ik_t, X)
+            total_loss += loss.item()
+            total_kl_loss += kl_loss.item()
+            total_reconstr_loss += reconstr_loss.item()
+            total_reg_loss += reg_loss.item()
+            j = 0
+            for theta in Theta_prev:
+                theta['mu'] = jmu[j].data
+                theta['sigma'] = torch.diag(torch.abs(torch.diag(jsig[j].data)))
+                theta['pai'] = jpai[j].data
+                theta['v'] = jv[j].data
+                j += 1
 
-    denominator = torch.sum(p_ik, dim=0, keepdim=True) + 1e-6
-
-    mu = numerator / denominator.t()
-    return mu
-
-
-def calculate_sigma(X, p_ik, mu_k):
-    K = mu_k.shape[0]
-
-    sigma_k_list = torch.ones((K, mu_k.shape[1], mu_k.shape[1]))
-
-    for k in range(K):
-        mu_k_reshaped = mu_k[k].view(-1, X.shape[1])
-        X_minus_mu = X - mu_k_reshaped
-        sigma_k_list[k] = torch.mm(X_minus_mu.t(), X_minus_mu * p_ik[:, k].unsqueeze(1)) / torch.sum(p_ik[:, k])
-
-    return sigma_k_list
-
-
-def calculate_v(X, p_ik):
-    v_k = torch.sum(p_ik, dim=0) / len(X)
-    return v_k
-
-
-def calculate_alpha_k(xi_i_k, alpha0_hat):
-    alpha_k = alpha0_hat + torch.sum(xi_i_k, dim=0)
-    return alpha_k
-
-
-def calculate_z(X, v_kt, sigma_kt):
-    D = X.shape[1]
-    gamma_dist = Gamma(v_kt + D / 2, 1 / (v_kt + sigma_kt / 2))
-    z_i_kt = gamma_dist.sample()
-    log_z_i_kt = gamma_dist.log_prob(z_i_kt)
-    return z_i_kt, log_z_i_kt
-
-
-def assign_clusters(X, Theta_updated):
-    xi_i_k = calculate_xi(X, Theta_updated)
-    clusters = torch.argmax(xi_i_k, dim=1)
-    return clusters
-
+        print("epoch {} loss={:.4f}".format(epoch,
+                                            total_loss / (batch + 1)))
+        print('kl_loss:', total_kl_loss / (batch + 1), 'reconstr_loss:', total_reconstr_loss / (batch + 1), 'reg_loss:',
+              total_reg_loss / (batch + 1))
+    return y_pred_last, z, model
