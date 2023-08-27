@@ -140,7 +140,6 @@ def update_SMM_parameters(X, Theta_prev, alpha0_hat, m0_hat, kappa0_hat, S0_hat,
     alpha_k = (alpha_k - 1) / (alpha_k.sum() - K + 1e-6)
     Omega = calculate_Omega(X, Theta_prev)
     for k in range(K):
-        print(k)
         p_ik = xi_i_k[:, k]
         q_ik = zeta_i_k[:, k]
         
