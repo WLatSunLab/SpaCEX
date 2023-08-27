@@ -145,10 +145,10 @@ def update_SMM_parameters(X, Theta_prev, alpha0_hat, m0_hat, kappa0_hat, S0_hat,
         
         N_ik = p_ik*q_ik
         N_k = torch.sum(p_ik*q_ik)
-        #if torch.isnan(N_k):
-            #N_k = 0
-        #if torch.isinf(N_k):
-            #N_k = 1
+        if np.isnan(N_k):
+            N_k = 0
+        if np.isinf(N_k):
+            N_k = 1
         x_bar_k = torch.matmul(N_ik, X) / (N_k + 1e-6)
         
         kappa_k = kappa0_hat + N_k
