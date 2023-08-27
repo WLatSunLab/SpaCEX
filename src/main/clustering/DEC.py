@@ -161,7 +161,7 @@ def DEC(model, dataset, total, config):
     optimizer1 = Adam([jmu, jsig, jpai, jv], lr=config['lr'])
     
     # if 1:
-    for epoch in range(5):
+    for epoch in range(30):
         total_loss = 0.
 
         # get embedding and rloss via all data
@@ -211,7 +211,7 @@ def DEC(model, dataset, total, config):
         reconstr_loss = rloss
         # update encoder
         loss = - config['l1'] * likeli_loss + config['l3'] * math.e ** (
-                    -50 / 3) * reg_loss - config['l4'] * size_loss + config['l6'] * reconstr_loss
+                    -(epoch+10) / 3) * reg_loss - config['l4'] * size_loss + config['l6'] * reconstr_loss
 
         #loss = reconstr_loss
         optimizer.zero_grad()
@@ -231,7 +231,7 @@ def DEC(model, dataset, total, config):
                   'reconstr_loss:', total_reconstr_loss)
         Theta_prev = Theta_updated
 
-    for epoch in range(5):
+    for epoch in range(30):
         # with torch.autograd.detect_anomaly():
         if epoch % config['interval'] == 0:
 
@@ -309,7 +309,7 @@ def DEC(model, dataset, total, config):
             z = z.to(device)
             reg_loss = regularization(z,lap_mat1)
             # update encoder
-            loss = config['gamma'] * kl_loss + config['l6'] * reconstr_loss + config['l3'] * math.e ** (-(10 + 10) / 3) * reg_loss
+            loss = config['gamma'] * kl_loss + config['l6'] * reconstr_loss + config['l3'] * math.e ** (-(epoch + 10) / 3) * reg_loss
 
             optimizer.zero_grad()
             loss.backward(retain_graph=True)
