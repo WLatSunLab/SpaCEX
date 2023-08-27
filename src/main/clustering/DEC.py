@@ -94,7 +94,6 @@ def DEC(model, dataset, total, config):
     n_batch = data.size(0) // batch_size + 1
     data = data.unsqueeze(1)
 
-    batch_size = 64
     total_samples = len(dataset)
     x_bar_part = []
     z_part = []
@@ -125,7 +124,6 @@ def DEC(model, dataset, total, config):
     K = config['num_classes']
 
     # get embedding and rloss via all data
-    batch_size = 64
     total_samples = len(dataset)
     x_bar_part = []
     z_part = []
@@ -155,8 +153,6 @@ def DEC(model, dataset, total, config):
     jv = Parameter(torch.Tensor(K, 1))
     torch.nn.init.xavier_normal_(jv.data)
     z = z.to('cpu')
-    #K = K.to('device')
-    #alpha0 = alpha0.to('device')
     Theta_prev, alpha0_hat, m0_hat, kappa0_hat, S0_hat, rho0_hat, clusters = initialize_SMM_parameters(z, K, alpha0,
                                                                                                        kappa0, rho0)
     y_pred_last = clusters
@@ -165,11 +161,10 @@ def DEC(model, dataset, total, config):
     optimizer1 = Adam([jmu, jsig, jpai, jv], lr=config['lr'])
     
     # if 1:
-    for epoch in range(50):
+    for epoch in range(5):
         total_loss = 0.
 
         # get embedding and rloss via all data
-        batch_size = 64
         total_samples = len(dataset)
         x_bar_part = []
         z_part = []
@@ -192,7 +187,7 @@ def DEC(model, dataset, total, config):
         Theta_updated, clusters, xi_i_k_history = EM_algorithm(z, K, Theta_prev, alpha0_hat, m0_hat, kappa0_hat,
                                                                 S0_hat, rho0_hat, clusters,
                                                                 max_iterations=5,  config=config, tol=5 * 1e-3)
-
+        
         q = torch.tensor(xi_i_k_history[-1])
         j = 0
         for theta in Theta_updated:
@@ -216,7 +211,7 @@ def DEC(model, dataset, total, config):
         reconstr_loss = rloss
         # update encoder
         loss = - config['l1'] * likeli_loss + config['l3'] * math.e ** (
-                    -epoch / 3) * reg_loss - config['l4'] * size_loss + config['l6'] * reconstr_loss
+                    -50 / 3) * reg_loss - config['l4'] * size_loss + config['l6'] * reconstr_loss
 
         #loss = reconstr_loss
         optimizer.zero_grad()
@@ -236,12 +231,11 @@ def DEC(model, dataset, total, config):
                   'reconstr_loss:', total_reconstr_loss)
         Theta_prev = Theta_updated
 
-    for epoch in range(50):
+    for epoch in range(5):
         # with torch.autograd.detect_anomaly():
         if epoch % config['interval'] == 0:
 
                 # get embedding and rloss via all data
-            batch_size = 64
             total_samples = len(dataset)
             x_bar_part = []
             z_part = []
@@ -295,31 +289,12 @@ def DEC(model, dataset, total, config):
 
             lap_mat1 = lap_mat[idx, :]
             lap_mat1 = lap_mat1[:, idx]
-
-            # get embedding and rloss via all data
-            batch_size = 64
-            total_samples = len(dataset)
-            x_bar_part = []
-            z_part = []
-            mask_part = []
-            with torch.no_grad():
-                for i in range(0, total_samples, batch_size):
-                    batch_data = data[i:i+batch_size]  # Get a batch of data
-                    batch_data = torch.Tensor(batch_data).to(device)
-                    batch_result_x_bar, batch_result_z, _, batch_result_mask = model(batch_data)
-
-                    x_bar_part.append(batch_result_x_bar)
-                    z_part.append(batch_result_z)
-                    mask_part.append(batch_result_mask)
-            # Concatenate the results along the batch dimension
-            x_bar = torch.cat(x_bar_part, dim=0)
-            z = torch.cat(z_part, dim=0)
-            mask = torch.cat(mask_part, dim=0)
-            rloss = caculate_rloss(data, x_bar, mask)
+            
+            x_bar, z, rloss, mask = model(x_train)
             z = z.to('cpu')
             _, _, xi_i_k_history = EM_algorithm(z, K, Theta_prev, alpha0_hat, m0_hat, kappa0_hat, S0_hat, rho0_hat,
                                                 clusters[idx], max_iterations=0, config=config, tol=5 * 1e-3)
-
+            
             q = torch.tensor(xi_i_k_history[0])
 
             j = 0
@@ -329,16 +304,14 @@ def DEC(model, dataset, total, config):
                 jpai.data[j] = torch.tensor(theta['pai'].detach().numpy())
                 jv.data[j] = torch.tensor(theta['v'].detach().numpy())
                 j += 1
-            kl_loss = F.kl_div(q.log(), p)
+            kl_loss = F.kl_div(q.log(), p[idx])
             reconstr_loss = rloss
             z = z.to(device)
-            reg_loss = regularization(z,lap_mat)
+            reg_loss = regularization(z,lap_mat1)
             # update encoder
-            loss = config['gamma'] * kl_loss + config['l6'] * reconstr_loss + config['l3'] * math.e ** (-(epoch + 10) / 3) * reg_loss
-            #loss = reconstr_loss
+            loss = config['gamma'] * kl_loss + config['l6'] * reconstr_loss + config['l3'] * math.e ** (-(10 + 10) / 3) * reg_loss
 
             optimizer.zero_grad()
-            loss.requires_grad_(True)
             loss.backward(retain_graph=True)
             optimizer.step()
             # update SMM
