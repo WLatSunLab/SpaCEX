@@ -27,8 +27,8 @@ def calculate_xi(X, Theta_updated):
     for j in range(K):
         dist = mvn.MultivariateNormal(Theta_updated[j]['mu'], Theta_updated[j]['sigma'])  # creat phi
         xi[:, j] = Theta_updated[j]['pai'] * dist.log_prob(X).exp()
-    #xi = torch.where(xi != torch.inf, xi, torch.ones((len(X), K)))  # outlier process
-    #xi = torch.where(torch.isnan(xi), torch.zeros((len(X), K)), xi)  # outlier process
+    xi = torch.where(xi != torch.inf, xi, torch.ones((len(X), K)))  # outlier process
+    xi = torch.where(torch.isnan(xi), torch.zeros((len(X), K)), xi)  # outlier process
     xi = torch.abs(xi)
     xi_sum = torch.sum(xi, dim=1)
     xi = (xi + 1e-6) / (xi_sum.unsqueeze(1) + 1e-6)
@@ -86,7 +86,7 @@ def caculate_v_k(v, k, xi, zeta):
     xi_k = xi[:, k]
     zeta_k = zeta[:, k]
     der = 0
-    for i in range(X.shape[0]):
+    for i in range(xi_k.shape[0]):
         der += xi_k[i]*(0.5*torch.log(v/2)+0.5-0.5*torch.digamma(v/2)+0.5*(torch.log(zeta_k[i])-zeta_k[i]))
     
     return v - 0.001*der
@@ -150,19 +150,19 @@ def update_SMM_parameters(X, Theta_prev, alpha0_hat, m0_hat, kappa0_hat, S0_hat,
         
         N_ik = p_ik*q_ik
         N_k = torch.sum(p_ik*q_ik)
-        #if torch.isnan(N_k):
-            #N_k = 0
-        #if torch.isinf(N_k):
-            #N_k = 1
+        if torch.isnan(N_k):
+            N_k = 0
+        if torch.isinf(N_k):
+            N_k = 1
         x_bar_k = torch.matmul(N_ik, X) / (N_k + 1e-6)
         
         kappa_k = kappa0_hat + N_k
         m_k = (kappa0_hat * m0_hat + N_k * x_bar_k) / (kappa_k)
         
         # 
-        Omega = calculate_Omega(X, Theta)
+        Omega = calculate_Omega(X, Theta_prev)
         Omega_ik = Omega[:, k]
-        S_mle_k = calculate_S_mle_k(X, Omega_ik, x_k)
+        S_mle_k = calculate_S_mle_k(X, Omega_ik, x_bar_k)
         S_k = S0_hat + S_mle_k
         rho_k = rho0_hat + torch.sum(p_ik)
 
