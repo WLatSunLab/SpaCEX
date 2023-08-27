@@ -153,7 +153,10 @@ def update_SMM_parameters(X, Theta_prev, alpha0_hat, m0_hat, kappa0_hat, S0_hat,
         
         kappa_k = kappa0_hat + N_k
         m_k = (kappa0_hat * m0_hat + N_k * x_bar_k) / (kappa_k)
-        
+        if np.isnan(m_k):
+            m_k = 0
+        if np.isinf(m_k):
+            m_k = 1
         Omega_ik = Omega[:, k]
         S_mle_k = calculate_S_mle_k(X, Omega_ik, x_bar_k)
         S_k = S0_hat + S_mle_k
