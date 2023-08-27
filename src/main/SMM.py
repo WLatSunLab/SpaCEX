@@ -27,8 +27,8 @@ def calculate_xi(X, Theta_updated):
     for j in range(K):
         dist = mvn.MultivariateNormal(Theta_updated[j]['mu'], Theta_updated[j]['sigma'])  # creat phi
         xi[:, j] = Theta_updated[j]['pai'] * dist.log_prob(X).exp()
-    xi = torch.where(xi != torch.inf, xi, torch.ones((len(X), K)))  # outlier process
-    xi = torch.where(torch.isnan(xi), torch.zeros((len(X), K)), xi)  # outlier process
+    #xi = torch.where(xi != torch.inf, xi, torch.ones((len(X), K)))  # outlier process
+    #xi = torch.where(torch.isnan(xi), torch.zeros((len(X), K)), xi)  # outlier process
     xi = torch.abs(xi)
     xi_sum = torch.sum(xi, dim=1)
     xi = (xi + 1e-6) / (xi_sum.unsqueeze(1) + 1e-6)
@@ -40,23 +40,18 @@ def calaculate_sigma(X, Theta_updated):
     K = len(Theta_updated)
     D = X.shape[1]
     sigma = torch.zeros(X.shape[0], K)
-    for i in range(X.shape[0]):
-        x_i = X[i].unsqueeze(dim=1)
-        for k in range(K):
-            sigma[i][k] = torch.mm(torch.mm((x_i-Theta_updated[k]['mu'].unsqueeze(dim=1)).t(), 
-                                  torch.inverse(Theta_updated[k]['sigma'])), 
-                                   (x_i-Theta_updated[k]['mu'].unsqueeze(dim=1)))
-            
+    for k in range(K):
+        sigma[:, k] = torch.diag(torch.mm(torch.mm(X-Theta_updated[k]['mu'], torch.inverse(Theta_updated[k]['sigma'])), (X-Theta_updated[k]['mu']).t()))
+
     return sigma
 
-    
+
 def calculate_zeta(X, Theta_updated, sigma):
     D = X.shape[1]
     K = len(Theta_updated)
-    zeta = torch.zeros((len(X), K))  # init zeta[N, K]
-    for i in range(X.shape[0]):
-        for k in range(K):
-            zeta[i][k] = (Theta_updated[k]['v']+D)/(Theta_updated[k]['v']+sigma[i][k])
+    zeta = torch.zeros(X.shape[0], K)
+    for k in range(K):
+        zeta[:, k] = (Theta_updated[k]['v']+D)/(Theta_updated[k]['v']+sigma[:, k])
     
     return zeta
 
@@ -143,24 +138,23 @@ def update_SMM_parameters(X, Theta_prev, alpha0_hat, m0_hat, kappa0_hat, S0_hat,
 
     alpha_k = calculate_alpha_k(xi_i_k, alpha0_hat)
     alpha_k = (alpha_k - 1) / (alpha_k.sum() - K + 1e-6)
+    Omega = calculate_Omega(X, Theta_prev)
     for k in range(K):
-
+        print(k)
         p_ik = xi_i_k[:, k]
         q_ik = zeta_i_k[:, k]
         
         N_ik = p_ik*q_ik
         N_k = torch.sum(p_ik*q_ik)
-        if torch.isnan(N_k):
-            N_k = 0
-        if torch.isinf(N_k):
-            N_k = 1
+        #if torch.isnan(N_k):
+            #N_k = 0
+        #if torch.isinf(N_k):
+            #N_k = 1
         x_bar_k = torch.matmul(N_ik, X) / (N_k + 1e-6)
         
         kappa_k = kappa0_hat + N_k
         m_k = (kappa0_hat * m0_hat + N_k * x_bar_k) / (kappa_k)
         
-        # 
-        Omega = calculate_Omega(X, Theta_prev)
         Omega_ik = Omega[:, k]
         S_mle_k = calculate_S_mle_k(X, Omega_ik, x_bar_k)
         S_k = S0_hat + S_mle_k
@@ -214,19 +208,6 @@ def calculate_mu(X, p_ik):
 
     mu = numerator / denominator.t()
     return mu
-
-
-def calculate_sigma(X, p_ik, mu_k):
-    K = mu_k.shape[0]
-
-    sigma_k_list = torch.ones((K, mu_k.shape[1], mu_k.shape[1]))
-
-    for k in range(K):
-        mu_k_reshaped = mu_k[k].view(-1, X.shape[1])
-        X_minus_mu = X - mu_k_reshaped
-        sigma_k_list[k] = torch.mm(X_minus_mu.t(), X_minus_mu * p_ik[:, k].unsqueeze(1)) / torch.sum(p_ik[:, k])
-
-    return sigma_k_list
 
 
 def calculate_v(X, p_ik):
