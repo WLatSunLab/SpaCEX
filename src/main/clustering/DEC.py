@@ -230,7 +230,7 @@ def DEC(model, dataset, total, config):
         total_size_loss = size_loss.item()
 
         total_reconstr_loss = reconstr_loss.item()
-        print("epoch {} loss={:.4f}".format(epoch + 1,
+        print("epoch {} loss1={:.4f}".format(epoch + 1,
                                                 total_loss))
         print('likeli_loss:', total_likeli_loss, 'reg_loss:', total_reg_loss, 'size_loss:', total_size_loss,
                   'reconstr_loss:', total_reconstr_loss)
@@ -360,7 +360,7 @@ def DEC(model, dataset, total, config):
                 theta['v'] = jv[j].data
                 j += 1
 
-        print("epoch {} loss={:.4f}".format(epoch,
+        print("epoch {} loss2={:.4f}".format(epoch,
                                             total_loss / (batch + 1)))
         print('kl_loss:', total_kl_loss / (batch + 1), 'reconstr_loss:', total_reconstr_loss / (batch + 1), 'reg_loss:',
               total_reg_loss / (batch + 1))
