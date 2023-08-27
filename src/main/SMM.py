@@ -140,35 +140,40 @@ def update_SMM_parameters(X, Theta_prev, alpha0_hat, m0_hat, kappa0_hat, S0_hat,
     alpha_k = (alpha_k - 1) / (alpha_k.sum() - K + 1e-6)
     Omega = calculate_Omega(X, Theta_prev)
     for k in range(K):
+        print(k)
         p_ik = xi_i_k[:, k]
         q_ik = zeta_i_k[:, k]
-        
         N_ik = p_ik*q_ik
         N_k = torch.sum(p_ik*q_ik)
         if np.isnan(N_k):
-            N_k = 0
+            N_k = 0.
         if np.isinf(N_k):
-            N_k = 1
+            N_k = 100.
         x_bar_k = torch.matmul(N_ik, X) / (N_k + 1e-6)
-        
+        mask = np.isnan(x_bar_k)
+        if mask.sum()!=0:
+            x_bar_k = X.mean(dim=0)
         kappa_k = kappa0_hat + N_k
         m_k = (kappa0_hat * m0_hat + N_k * x_bar_k) / (kappa_k)
-        if np.isnan(m_k):
-            m_k = 0
-        if np.isinf(m_k):
-            m_k = 1
+        
+        mask = np.isnan(m_k)  # 找到NaN值
+        m_k[mask] = 0
+        mask = np.isinf(m_k)
+        m_k[mask] = 1
+        
         Omega_ik = Omega[:, k]
         S_mle_k = calculate_S_mle_k(X, Omega_ik, x_bar_k)
         S_k = S0_hat + S_mle_k
         rho_k = rho0_hat + torch.sum(p_ik)
 
-        #if torch.isnan(S_k).any() or torch.isinf(S_k).any():
-            #continue
+        if torch.isnan(S_k).any() or torch.isinf(S_k).any():
+            continue
         
         v = Theta_prev[k]['v']
         Theta_prev[k]['mu'] = m_k
         Theta_prev[k]['sigma'] = S_k / (rho_k+D+2)
         Theta_prev[k]['sigma'] = torch.abs(torch.diag(torch.diag(Theta_prev[k]['sigma']) + 1e-6))
+        has_nan = torch.isnan(Theta_prev[k]['sigma']).any().item()
         Theta_prev[k]['v'] = caculate_v_k(Theta_prev[k]['v'], k, xi_i_k, zeta_i_k)
         Theta_prev[k]['pai'] = alpha_k[k]
 
