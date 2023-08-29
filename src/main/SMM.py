@@ -9,29 +9,31 @@ import torch.distributions.multivariate_normal as mvn
 def calculate_S_mle_k(X, Omega_ik, x_k):
     N = X.shape[0]
     D = X.shape[1]
-    S_mle_k = torch.ones(D, D)
+    S_mle_k = torch.ones(D, D).to('cuda')
     x_k_reshaped = x_k.view(-1, X.shape[1])
     X_minus_mu = X - x_k_reshaped
-    for i in range(N):
-        S_mle_k+=Omega_ik[i]*torch.mm(X_minus_mu[i,:].reshape(D, 1), X_minus_mu[i,:].reshape(D, 1).t())
-    
     # the weighted average sum of the mean-centered covariance matrix
     S_mle_k = torch.mm(X_minus_mu.t(), X_minus_mu)
-    
     return S_mle_k
 
 
 def calculate_xi(X, Theta_updated):
     K = len(Theta_updated)  # the number of clusters
-    xi = torch.zeros((len(X), K))  # init xi[N, K]
+    xi = torch.zeros((X.shape[0], K)).to('cpu')  # init xi[N, K]
+    X_np = X.to('cpu')
     for j in range(K):
-        dist = mvn.MultivariateNormal(Theta_updated[j]['mu'], Theta_updated[j]['sigma'])  # creat phi
-        xi[:, j] = Theta_updated[j]['pai'] * dist.log_prob(X).exp()
-    #xi = torch.where(xi != torch.inf, xi, torch.ones((len(X), K)))  # outlier process
-    #xi = torch.where(torch.isnan(xi), torch.zeros((len(X), K)), xi)  # outlier process
-    xi = torch.abs(xi)
+        theta_j_mu = torch.tensor(Theta_updated[j]['mu']).to('cpu')
+        theta_j_sigma = torch.tensor(Theta_updated[j]['sigma']).to('cpu')
+        theta_j_pai = torch.tensor(Theta_updated[j]['pai']).to('cpu')
+        dist = mvn.MultivariateNormal(theta_j_mu, theta_j_sigma)  # creat phi
+        xi[:, j] = theta_j_pai * dist.log_prob(X_np).exp()
+    print('dist.log_prob(X_np).exp()', dist.log_prob(X_np).exp())
+    xi = torch.where(xi != torch.inf, xi, torch.ones((len(X), K)))  # outlier process
+    xi = torch.where(torch.isnan(xi), torch.zeros((len(X), K)), xi)  # outlier process
+    xi = torch.abs(xi).to('cuda')
     xi_sum = torch.sum(xi, dim=1)
     xi = (xi + 1e-6) / (xi_sum.unsqueeze(1) + 1e-6)
+    print('xi', xi)
 
     return xi
 
@@ -39,24 +41,27 @@ def calculate_xi(X, Theta_updated):
 def calaculate_sigma(X, Theta_updated):
     K = len(Theta_updated)
     D = X.shape[1]
-    sigma = torch.zeros(X.shape[0], K)
+    sigma = torch.zeros(X.shape[0], K).to('cuda')
     for k in range(K):
-        sigma[:, k] = torch.diag(torch.mm(torch.mm(X-Theta_updated[k]['mu'], torch.inverse(Theta_updated[k]['sigma'])), (X-Theta_updated[k]['mu']).t()))
-
+        theta_k_mu = torch.tensor(Theta_updated[k]['mu']).unsqueeze(dim=0).to('cuda')
+        theta_k_sigma = torch.tensor(Theta_updated[k]['sigma']).to('cuda')
+        sigma[:, k] = torch.diag(torch.mm(torch.mm(X-theta_k_mu, torch.inverse(theta_k_sigma)), (X-theta_k_mu).t()))
+    
     return sigma
 
 
 def calculate_zeta(X, Theta_updated, sigma):
     D = X.shape[1]
     K = len(Theta_updated)
-    zeta = torch.zeros(X.shape[0], K)
+    zeta = torch.zeros(X.shape[0], K).to('cuda')
     for k in range(K):
-        zeta[:, k] = (Theta_updated[k]['v']+D)/(Theta_updated[k]['v']+sigma[:, k])
+        theta_k_v = torch.tensor(Theta_updated[k]['v']).to('cuda')
+        zeta[:, k] = (theta_k_v+D)/(theta_k_v+sigma[:, k])
     
     return zeta
 
 
-def calculate_Omega(X, Theta_updated):
+def calculate_Omegacalculate_Omega(X, Theta_prev):
     xi = calculate_xi(X, Theta_updated)
     sigma = calaculate_sigma(X, Theta_updated)
     zeta = calculate_zeta(X, Theta_updated, sigma)
@@ -78,17 +83,19 @@ def calculate_x_k(X, k, Omega):
 
 
 def caculate_v_k(v, k, xi, zeta):
+    v = torch.tensor(v).to('cuda')
     xi_k = xi[:, k]
     zeta_k = zeta[:, k]
-    der = 0
+    der = torch.tensor(0.).to('cuda')
     for i in range(xi_k.shape[0]):
-        der += xi_k[i]*(0.5*torch.log(v/2)+0.5-0.5*torch.digamma(v/2)+0.5*(torch.log(zeta_k[i])-zeta_k[i]))
+        der += xi_k[i]*(0.5*torch.log(v/2).item()+0.5-0.5*torch.digamma(v/2).item()+0.5*(torch.log(zeta_k[i])-zeta_k[i]).item())
     
     return v - 0.001*der
     
     
+    
 def initialize_SMM_parameters(X, K, alpha0, kappa0, rho0):
-    # Convert samples to NumPy array for K-means clustering
+     #Convert samples to NumPy array for K-means clustering
     X_np = X.detach().numpy()
 
     # Perform K-means clustering on the data
@@ -117,6 +124,7 @@ def initialize_SMM_parameters(X, K, alpha0, kappa0, rho0):
 
     m0 = torch.tensor(kmeans.cluster_centers_, dtype=torch.float32).mean()
     S0 = K**(-1/D)*torch.diag(torch.diag(torch.mm((X-X/N).t(), X-X/N)) + 1e-6)
+    S0=torch.mean(torch.stack([torch.diag(theta['sigma'])  for theta in Theta]),dim=0)
 
     alpha0_hat = alpha0 * torch.ones(K)
     m0_hat = m0 
@@ -132,48 +140,47 @@ def update_SMM_parameters(X, Theta_prev, alpha0_hat, m0_hat, kappa0_hat, S0_hat,
     K = len(Theta_prev)
     D = X.shape[1]
     
-    sigma = calaculate_sigma(X, Theta_prev)
-    xi_i_k = calculate_xi(X, Theta_prev)
-    zeta_i_k = calculate_zeta(X, Theta_prev, sigma)
+    sigma = calaculate_sigma(X, Theta_prev)  # to cuda
+    xi_i_k = calculate_xi(X, Theta_prev)  # to cuda
+    zeta_i_k = calculate_zeta(X, Theta_prev, sigma)    # to cuda
 
-    alpha_k = calculate_alpha_k(xi_i_k, alpha0_hat)
+    alpha_k = calculate_alpha_k(xi_i_k, alpha0_hat)  # to cuda
     alpha_k = (alpha_k - 1) / (alpha_k.sum() - K + 1e-6)
-    Omega = calculate_Omega(X, Theta_prev)
+    Omega = torch.mul(xi_i_k, zeta_i_k)  # to cuda
+    
     for k in range(K):
         print(k)
         p_ik = xi_i_k[:, k]
         q_ik = zeta_i_k[:, k]
         N_ik = p_ik*q_ik
         N_k = torch.sum(p_ik*q_ik)
-        if np.isnan(N_k):
-            N_k = 0.
-        if np.isinf(N_k):
-            N_k = 100.
+        if np.isnan(N_k.item()):
+            N_k = torch.tensor(0.).to('cuda')
         x_bar_k = torch.matmul(N_ik, X) / (N_k + 1e-6)
-        mask = np.isnan(x_bar_k)
-        if mask.sum()!=0:
+        mask = torch.isnan(x_bar_k)
+        if mask.sum().item()!=0:
             x_bar_k = X.mean(dim=0)
+            
         kappa_k = kappa0_hat + N_k
         m_k = (kappa0_hat * m0_hat + N_k * x_bar_k) / (kappa_k)
-        
-        mask = np.isnan(m_k)  # 找到NaN值
-        m_k[mask] = 0
-        mask = np.isinf(m_k)
-        m_k[mask] = 1
+        if kappa_k == 0:
+            m_k = x_bar_k
         
         Omega_ik = Omega[:, k]
         S_mle_k = calculate_S_mle_k(X, Omega_ik, x_bar_k)
         S_k = S0_hat + S_mle_k
-        rho_k = rho0_hat + torch.sum(p_ik)
-
-        if torch.isnan(S_k).any() or torch.isinf(S_k).any():
-            continue
-        
+        mask = torch.isnan(S_k)
+        if mask.sum().item()!=0:
+            S_k = S0_hat
+            
+        if np.isnan(torch.sum(p_ik).item()):
+            rho_k = rho0_hat
+        else:
+            rho_k = rho0_hat + torch.sum(p_ik)
         v = Theta_prev[k]['v']
         Theta_prev[k]['mu'] = m_k
         Theta_prev[k]['sigma'] = S_k / (rho_k+D+2)
         Theta_prev[k]['sigma'] = torch.abs(torch.diag(torch.diag(Theta_prev[k]['sigma']) + 1e-6))
-        has_nan = torch.isnan(Theta_prev[k]['sigma']).any().item()
         Theta_prev[k]['v'] = caculate_v_k(Theta_prev[k]['v'], k, xi_i_k, zeta_i_k)
         Theta_prev[k]['pai'] = alpha_k[k]
 
