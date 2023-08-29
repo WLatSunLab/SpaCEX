@@ -22,6 +22,15 @@ def EM_algorithm(X, K,
                  max_iterations,
                  config,
                  tol=5 * 1e-3):
+    
+    X = X.to('cuda')
+    alpha0_hat = torch.tensor(alpha0_hat).to('cuda')
+    m0_hat = torch.tensor(m0_hat).to('cuda')
+    kappa0_hat = torch.tensor(kappa0_hat).to('cuda')
+    S0_hat = torch.tensor(S0_hat).to('cuda')
+    rho0_hat = torch.tensor(rho0_hat).to('cuda')
+    clusters = torch.tensor(clusters).to('cuda')
+    
     N = len(X)
     xi_i_k = calculate_xi(X, Theta_prev)
     xi_i_k_history = [xi_i_k] 
