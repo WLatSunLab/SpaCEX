@@ -21,8 +21,32 @@ We develop the **SpaCEX** which utilize self-supervised learning on spatially co
 * Detect spatially variable genes.
 * Cluster spatial spots into tissue domains
 
-# Getting Started
+# Installation
+You can download the package from GitHub and install it locally:
 ```bash
 git clone https://github.com/WLatSunLab/SpaCEX.git
 cd SpaCEX
 ```
+
+# Getting Started
+**What** you should input:
+
+`dataset` gene image data with size [N, 1, 72, 59]
+
+`total` gene similarity matrix with size [N, N]
+
+**What** you will get return:
+
+`model` encoder that haved been trained
+
+`y_pred` label that SpaCEX generative
+
+`embedding` embedding that generatived by encoder
+```bash
+from SpaCEX.src.main.SpaCEX import SpaCEX
+
+y_pred, embedding, model = SpaCEX.train(dataset = dataset, total = total)
+```
+# Others
+If you wanna get other return such as x_bar or parameters of SMM, just rewrite DEC to get what you want.
+
