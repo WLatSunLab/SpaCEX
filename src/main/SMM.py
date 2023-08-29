@@ -148,7 +148,6 @@ def update_SMM_parameters(X, Theta_prev, alpha0_hat, m0_hat, kappa0_hat, S0_hat,
     alpha_k = calculate_alpha_k(xi_i_k, alpha0_hat)  # to cuda
     alpha_k = (alpha_k - 1) / (alpha_k.sum() - K + 1e-6)
     Omega = torch.mul(xi_i_k, zeta_i_k)  # to cuda
-    a = time.time()
     for k in range(K):
         p_ik = xi_i_k[:, k] 
         q_ik = zeta_i_k[:, k]
@@ -190,8 +189,6 @@ def update_SMM_parameters(X, Theta_prev, alpha0_hat, m0_hat, kappa0_hat, S0_hat,
         Theta_prev[k]['sigma'] = torch.abs(torch.diag(torch.diag(Theta_prev[k]['sigma']) + 1e-6))       
         Theta_prev[k]['v'] = caculate_v_k(Theta_prev[k]['v'], k, xi_i_k, zeta_i_k)
         Theta_prev[k]['pai'] = alpha_k[k]
-    b = time.time()
-    print(b-a)
     return Theta_prev
 
 
