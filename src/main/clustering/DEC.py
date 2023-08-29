@@ -120,7 +120,7 @@ def DEC(model, dataset, total, config):
     # Set the remaining variables based on prior knowledge or assumptions
     alpha0 = 1.
     kappa0 = 0.0000
-    rho0 = config['embed_dim'] + 2
+    rho0 = config['embed_dim_out'] + 2
     K = config['num_classes']
 
     # get embedding and rloss via all data
@@ -143,7 +143,7 @@ def DEC(model, dataset, total, config):
     mask = torch.cat(mask_part, dim=0)
     rloss = caculate_rloss(data, x_bar, mask)
 
-    n_z = config['embed_dim']
+    n_z = config['embed_dim_out']
     jmu = Parameter(torch.Tensor(K, n_z))
     torch.nn.init.xavier_normal_(jmu.data)
     jsig = Parameter(torch.Tensor(K, n_z, n_z))
