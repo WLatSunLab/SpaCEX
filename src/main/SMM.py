@@ -1,4 +1,5 @@
 import torch
+import time
 import numpy as np
 from sympy.stats import Gamma
 from sklearn.cluster import KMeans
@@ -84,11 +85,13 @@ def caculate_v_k(v, k, xi, zeta):
     v = torch.tensor(v).to('cuda')
     xi_k = xi[:, k]
     zeta_k = zeta[:, k]
-    der = torch.tensor(0.).to('cuda')
-    for i in range(xi_k.shape[0]):
-        der += xi_k[i]*(0.5*torch.log(v/2).item()+0.5-0.5*torch.digamma(v/2).item()+0.5*(torch.log(zeta_k[i])-zeta_k[i]).item())
     
-    return v - 0.001*der
+    for i in range(3):
+        der = torch.tensor(0.).to('cuda')
+        der = torch.sum(xi_k*(0.5*torch.log(v/2).item()+0.5-0.5*torch.digamma(v/2).item()+0.5*(torch.log(zeta_k)-zeta_k)), dim=0)
+        v = v - 0.001*der
+        
+    return v
     
     
     
@@ -145,27 +148,33 @@ def update_SMM_parameters(X, Theta_prev, alpha0_hat, m0_hat, kappa0_hat, S0_hat,
     alpha_k = calculate_alpha_k(xi_i_k, alpha0_hat)  # to cuda
     alpha_k = (alpha_k - 1) / (alpha_k.sum() - K + 1e-6)
     Omega = torch.mul(xi_i_k, zeta_i_k)  # to cuda
-    
+    a = time.time()
     for k in range(K):
-        print(k)
-        p_ik = xi_i_k[:, k]
+        p_ik = xi_i_k[:, k] 
         q_ik = zeta_i_k[:, k]
-        N_ik = p_ik*q_ik
+        N_ik = p_ik*q_ik       
         N_k = torch.sum(p_ik*q_ik)
+        
         if np.isnan(N_k.item()):
-            N_k = torch.tensor(0.).to('cuda')
+            N_k = torch.tensor(0.).to('cuda')    
+            
         x_bar_k = torch.matmul(N_ik, X) / (N_k + 1e-6)
         mask = torch.isnan(x_bar_k)
+        
         if mask.sum().item()!=0:
             x_bar_k = X.mean(dim=0)
             
         kappa_k = kappa0_hat + N_k
         m_k = (kappa0_hat * m0_hat + N_k * x_bar_k) / (kappa_k)
+        
         if kappa_k == 0:
             m_k = x_bar_k
         
-        Omega_ik = Omega[:, k]
+        Omega_ik = Omega[:, k]              
         S_mle_k = calculate_S_mle_k(X, Omega_ik, x_bar_k)
+
+        
+        
         S_k = S0_hat + S_mle_k
         mask = torch.isnan(S_k)
         if mask.sum().item()!=0:
@@ -177,11 +186,12 @@ def update_SMM_parameters(X, Theta_prev, alpha0_hat, m0_hat, kappa0_hat, S0_hat,
             rho_k = rho0_hat + torch.sum(p_ik)
         v = Theta_prev[k]['v']
         Theta_prev[k]['mu'] = m_k
-        Theta_prev[k]['sigma'] = S_k / (rho_k+D+2)
-        Theta_prev[k]['sigma'] = torch.abs(torch.diag(torch.diag(Theta_prev[k]['sigma']) + 1e-6))
+        Theta_prev[k]['sigma'] = S_k / (rho_k+D+2)           
+        Theta_prev[k]['sigma'] = torch.abs(torch.diag(torch.diag(Theta_prev[k]['sigma']) + 1e-6))       
         Theta_prev[k]['v'] = caculate_v_k(Theta_prev[k]['v'], k, xi_i_k, zeta_i_k)
         Theta_prev[k]['pai'] = alpha_k[k]
-
+    b = time.time()
+    print(b-a)
     return Theta_prev
 
 
