@@ -27,13 +27,11 @@ def calculate_xi(X, Theta_updated):
         theta_j_pai = torch.tensor(Theta_updated[j]['pai']).to('cpu')
         dist = mvn.MultivariateNormal(theta_j_mu, theta_j_sigma)  # creat phi
         xi[:, j] = theta_j_pai * dist.log_prob(X_np).exp()
-    print('dist.log_prob(X_np).exp()', dist.log_prob(X_np).exp())
     xi = torch.where(xi != torch.inf, xi, torch.ones((len(X), K)))  # outlier process
     xi = torch.where(torch.isnan(xi), torch.zeros((len(X), K)), xi)  # outlier process
     xi = torch.abs(xi).to('cuda')
     xi_sum = torch.sum(xi, dim=1)
     xi = (xi + 1e-6) / (xi_sum.unsqueeze(1) + 1e-6)
-    print('xi', xi)
 
     return xi
 
