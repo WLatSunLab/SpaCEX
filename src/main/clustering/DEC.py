@@ -102,7 +102,7 @@ def DEC(model, dataset, total, config):
         for i in range(0, total_samples, batch_size):
             batch_data = data[i:i+batch_size]  # Get a batch of data
             batch_data = torch.Tensor(batch_data).to(device)
-            batch_result_x_bar, batch_result_z, _, batch_result_mask = model(batch_data)
+            batch_result_x_bar, batch_result_z, _, batch_result_mask,_ = model(batch_data)
 
             x_bar_part.append(batch_result_x_bar)
             z_part.append(batch_result_z)
@@ -132,7 +132,7 @@ def DEC(model, dataset, total, config):
         for i in range(0, total_samples, batch_size):
             batch_data = data[i:i+batch_size]  # Get a batch of data
             batch_data = torch.Tensor(batch_data).to(device)
-            batch_result_x_bar, batch_result_z, _, batch_result_mask = model(batch_data)
+            batch_result_x_bar, batch_result_z, _, batch_result_mask, _ = model(batch_data)
 
             x_bar_part.append(batch_result_x_bar)
             z_part.append(batch_result_z)
@@ -155,13 +155,14 @@ def DEC(model, dataset, total, config):
     z = z.to('cpu')
     Theta_prev, alpha0_hat, m0_hat, kappa0_hat, S0_hat, rho0_hat, clusters = initialize_SMM_parameters(z, K, alpha0,
                                                                                                        kappa0, rho0)
+    
     y_pred_last = clusters
 
     optimizer = Adam(model.parameters(), lr=config['lr'])
     optimizer1 = Adam([jmu, jsig, jpai, jv], lr=config['lr'])
     
     # if 1:
-    for epoch in range(30):
+    for epoch in range(10):
         total_loss = 0.
 
         # get embedding and rloss via all data
@@ -173,7 +174,7 @@ def DEC(model, dataset, total, config):
             for i in range(0, total_samples, batch_size):
                 batch_data = data[i:i+batch_size]  # Get a batch of data
                 batch_data = torch.Tensor(batch_data).to(device)
-                batch_result_x_bar, batch_result_z, _, batch_result_mask = model(batch_data)
+                batch_result_x_bar, batch_result_z, _, batch_result_mask, _ = model(batch_data)
 
                 x_bar_part.append(batch_result_x_bar)
                 z_part.append(batch_result_z)
@@ -183,27 +184,33 @@ def DEC(model, dataset, total, config):
         z = torch.cat(z_part, dim=0)
         mask = torch.cat(mask_part, dim=0)
         rloss = caculate_rloss(data, x_bar, mask)
-        z = z.to('cpu')
+        #z = z.to('cpu')
         Theta_updated, clusters, xi_i_k_history = EM_algorithm(z, K, Theta_prev, alpha0_hat, m0_hat, kappa0_hat,
                                                                 S0_hat, rho0_hat, clusters,
-                                                                max_iterations=5,  config=config, tol=5 * 1e-3)
+                                                                max_iterations=2,  config=config, tol=5 * 1e-3)
         
         q = torch.tensor(xi_i_k_history[-1])
         j = 0
         for theta in Theta_updated:
-            jpai.data[j] = torch.tensor(theta['pai'].detach().numpy())
+            theta_pai = torch.tensor(theta['pai']).to('cpu')  
+            jpai.data[j] = torch.tensor(theta_pai.detach().numpy())
             j += 1
 
         # evaluate clustering performance
         y_pred = clusters
+        y_pred = y_pred.to('cuda')
+        y_pred_last = y_pred_last.to('cuda')
         delta_label = torch.sum(y_pred != y_pred_last) / y_pred.size(0)
         y_pred_last = y_pred
         if epoch > 0 and delta_label < config['tol']:
             print('delta_label {:.4f}'.format(delta_label), '< tol', config['tol'])
             print('Reached tolerance threshold. Stopping training.')
             break
-
+        q = q.to('cuda')
+        jpai = jpai.to('cuda')
         likeli_loss = likelihood(q, jpai)
+        if torch.isnan(likeli_loss):
+            likeli_loss = torch.tensor(0.).to('cuda')
         z = z.to(device)
         reg_loss = regularization(z, lap_mat)
         size_loss = size(q)
@@ -212,8 +219,8 @@ def DEC(model, dataset, total, config):
         # update encoder
         loss = - config['l1'] * likeli_loss + config['l3'] * math.e ** (
                     -(epoch+10) / 3) * reg_loss - config['l4'] * size_loss + config['l6'] * reconstr_loss
-
         #loss = reconstr_loss
+        loss.requires_grad_(True) 
         optimizer.zero_grad()
         loss.backward(retain_graph=True)
         optimizer.step()
@@ -231,7 +238,7 @@ def DEC(model, dataset, total, config):
                   'reconstr_loss:', total_reconstr_loss)
         Theta_prev = Theta_updated
 
-    for epoch in range(30):
+    for epoch in range(10):
         # with torch.autograd.detect_anomaly():
         if epoch % config['interval'] == 0:
 
@@ -244,7 +251,7 @@ def DEC(model, dataset, total, config):
                 for i in range(0, total_samples, batch_size):
                     batch_data = data[i:i+batch_size]  # Get a batch of data
                     batch_data = torch.Tensor(batch_data).to(device)
-                    batch_result_x_bar, batch_result_z, _, batch_result_mask = model(batch_data)
+                    batch_result_x_bar, batch_result_z, _, batch_result_mask, _ = model(batch_data)
 
                     x_bar_part.append(batch_result_x_bar)
                     z_part.append(batch_result_z)
@@ -254,10 +261,10 @@ def DEC(model, dataset, total, config):
             z = torch.cat(z_part, dim=0)
             mask = torch.cat(mask_part, dim=0)
             rloss = caculate_rloss(data, x_bar, mask)
-            z = z.to('cpu')
+            #z = z.to('cpu')
             Theta_prev, clusters, xi_i_k_history = EM_algorithm(z, K, Theta_prev, alpha0_hat, m0_hat, kappa0_hat,
                                                                 S0_hat, rho0_hat, clusters,
-                                                                max_iterations=5, config=config, tol=5 * 1e-3)
+                                                                max_iterations=2, config=config, tol=5 * 1e-3)
 
             # update target distribution p
             tmp_q = xi_i_k_history[-1].data
@@ -290,20 +297,26 @@ def DEC(model, dataset, total, config):
             lap_mat1 = lap_mat[idx, :]
             lap_mat1 = lap_mat1[:, idx]
             
-            x_bar, z, rloss, mask = model(x_train)
+            x_bar, z, rloss, mask, q = model(x_train)
             z = z.to('cpu')
             _, _, xi_i_k_history = EM_algorithm(z, K, Theta_prev, alpha0_hat, m0_hat, kappa0_hat, S0_hat, rho0_hat,
-                                                clusters[idx], max_iterations=0, config=config, tol=5 * 1e-3)
+                                                clusters[idx], max_iterations=2, config=config, tol=5 * 1e-3)
+            
             
             q = torch.tensor(xi_i_k_history[0])
 
             j = 0
             for theta in Theta_prev:
-                jmu.data[j] = torch.tensor(theta['mu'].detach().numpy())
-                jsig.data[j] = torch.tensor(theta['sigma'].detach().numpy())
-                jpai.data[j] = torch.tensor(theta['pai'].detach().numpy())
-                jv.data[j] = torch.tensor(theta['v'].detach().numpy())
+                theta_mu = torch.tensor(theta['mu']).to('cpu')  
+                theta_sigma = torch.tensor(theta['sigma']).to('cpu')  
+                theta_pai = torch.tensor(theta['pai']).to('cpu')  
+                theta_v = torch.tensor(theta['v']).to('cpu')  
+                jmu.data[j] = torch.tensor(theta_mu.detach().numpy())
+                jsig.data[j] = torch.tensor(theta_sigma.detach().numpy())
+                jpai.data[j] = torch.tensor(theta_pai.detach().numpy())
+                jv.data[j] = torch.tensor(theta_v.detach().numpy())
                 j += 1
+
             kl_loss = F.kl_div(q.log(), p[idx])
             reconstr_loss = rloss
             z = z.to(device)
