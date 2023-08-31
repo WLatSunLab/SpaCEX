@@ -5,16 +5,18 @@ class Config:
         config = {
             'Gene image': {
                 'MAE': {
+                    'decoder': 'Gene',
                     'model': 'MAE',  # used for clustering judgment
-                    'batch_size': 32,  # batch_size in pre-training
+                    'batch_size': 256,  # batch_size in pre-training
                     'lr': 0.01,  # leraning rate in pre-training
-                    'n_epochs': 20,  # epoch in pre-training
+                    'n_epochs': 10,  # epoch in pre-training
                     'tol': 0.001,  # optimize tolerance in DEC
-                    'num_classes': 500,  # category, dlpfc is 500
+                    'num_classes': 10,  # category, dlpfc is 500
                     'img_size': (72, 59),  # image size，dlpfc is [28, 28]
                     'patch_size': (4, 4),  # patch size, dlpfc is [4, 4]
                     'in_chans': 1,  # image channel, dlpfc is 1
                     'embed_dim': 16,  # embedding dim，p**2*channel
+                    'embed_dim_out': 32,
                     'depth': 5,  # number of transformer
                     'num_heads': 4,  # multi-head
                     'dim_head': 4,  # head dim in multi-head attention
@@ -22,8 +24,8 @@ class Config:
                     'mlp_ratio': 5,  # ratio between the hidden dimension and the embedded dimension
                     'norm_pix_loss': False,  # wheather to normalize
                     'alpha': 0.8,  # alpha in DEC
-                    'n_clusters': 500,  # number of category, dlpfc is 500
-                    'n_init': 20,  # kmeans
+                    'n_clusters': 10,  # number of category, dlpfc is 500
+                    'n_init': 30,  # kmeans
                     'interval': 1,  # interval in DEC
                     'gamma': 0.1,  # coefficient of clustering loss
                     'l1': 0.1,  # coefficient of nega-likelihood loss
@@ -59,10 +61,11 @@ class Config:
                 },
                 'VIT': {},
                 'MAE': {
+                    'decoder': 'MNIST', 
                     'model': 'MAE',  # used for clustering judgment
                     'batch_size': 256,  # batch_size in pre-training
                     'lr': 0.01,  # leraning rate in pre-training
-                    'n_epochs': 20,  # epoch in pre-training
+                    'n_epochs': 30,  # epoch in pre-training
                     'tol': 0.001,  # optimize tolerance in DEC
                     'num_classes': 10,  # category, MNIST is 10
                     'img_size': (28, 28),  # image size，MNIST is [28, 28]
@@ -73,11 +76,12 @@ class Config:
                     'num_heads': 4,  # multi-head
                     'dim_head': 4,  # head dim in multi-head attention
                     'decoder_embed_dim': 16,  # positional embedding dim
-                    'mlp_ratio': 5,  # ratio between the hidden dimension and the embedded dimension
+                    'mlp_ratio': 4,  # ratio between the hidden dimension and the embedded dimension
                     'norm_pix_loss': False,  # wheather to normalize
                     'alpha': 0.8,  # alpha in DEC
                     'n_clusters': 10, # number of category, MNIST is 10
                     'n_init': 20, # kmeans
+                    'gamma': 0.1,
                     'interval': 1  # interval in DEC
                 },
                 'VGG':{
