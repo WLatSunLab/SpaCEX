@@ -17,7 +17,7 @@ MAE_encoder
 '''
 
 
-class PatchEmbed(nn.Module):  # 在MNIST上，[B, 1, 72, 59]->[B, 252, embed_dim]
+class PatchEmbed(nn.Module):  # [B, 1, 72, 59]->[B, 252, embed_dim]
     def __init__(self, img_size=(72, 59), patch_size=(4, 4), in_chans=1, embed_dim=16):
         super(PatchEmbed, self).__init__()
 
@@ -140,6 +140,20 @@ class Block(nn.Module):
         return output_s2
 
 
+class ProjectionLayer(nn.Module):
+    def __init__(self, embed_dim=16, embed_dim_out=32):
+        super(ProjectionLayer, self).__init__()
+        self.projection_layer = nn.Sequential(
+            nn.Linear(embed_dim, 16),
+            nn.ReLU(inplace=True),
+            nn.Linear(16, embed_dim_out)
+        )
+
+    def forward(self, x):
+        x = self.projection_layer(x)
+        return x
+
+
 # get positional embedding
 def get_2d_sincos_pos_embed(embed_dim, grid_size, cls_token=False):
     """
@@ -204,6 +218,7 @@ class MAE_encoder(nn.Module):
                  depth=3,
                  num_heads=4,
                  dim_head=4,
+                 decoder = 'MNIST',
                  decoder_embed_dim=16,
                  mlp_ratio=4.,
                  norm_pix_loss=False):
@@ -231,7 +246,24 @@ class MAE_encoder(nn.Module):
                                               requires_grad=True)  # fixed sin-cos embedding
 
         # decoder
-        self.decoder = nn.Sequential(
+        self.decoder_type = decoder
+        self.decoder_MNIST = nn.Sequential(
+            nn.Linear(embed_dim, 128),
+            nn.ReLU(True),
+            nn.Linear(128,  3 * 3 * 32),
+            nn.ReLU(True),
+            nn.Unflatten(dim=1, unflattened_size=(32, 3, 3)),
+            nn.ConvTranspose2d(32, 16, 3, stride=2, output_padding=0),
+            nn.BatchNorm2d(16),
+            nn.ReLU(True),
+            nn.ConvTranspose2d(16, 8, 3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(8),
+            nn.ReLU(True),
+            nn.ConvTranspose2d(8, 1, 3, stride=2, padding=1, output_padding=1),
+            nn.Upsample(size=([28, 28]))
+        )
+        
+        self.decoder_Gene = nn.Sequential(
             nn.Linear(embed_dim, 128),
             nn.ReLU(True),
             nn.Linear(128, 9 * 7 * 32),
@@ -259,11 +291,10 @@ class MAE_encoder(nn.Module):
         # initialize (and freeze) pos_embed by sin-cos embedding
         pos_embed = get_2d_sincos_pos_embed(self.pos_embed.shape[-1], int(self.patch_embed.num_patches ** .5),
                                             cls_token=False)
-        # self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
+
 
         decoder_pos_embed = get_2d_sincos_pos_embed(self.decoder_pos_embed.shape[-1],
                                                     int(self.patch_embed.num_patches ** .5), cls_token=False)
-        # self.decoder_pos_embed.data.copy_(torch.from_numpy(decoder_pos_embed).float().unsqueeze(0))
 
         # initialize patch_embed like nn.Linear (instead of nn.Conv2d)
         w = self.patch_embed.proj.weight.data
@@ -366,7 +397,11 @@ class MAE_encoder(nn.Module):
         # add pos embed
         x = x + self.decoder_pos_embed
         x = x.mean(dim=1)  # 32x16
-        x = self.decoder(x)
+        if self.decoder_type == 'Gene':
+            x = self.decoder_Gene(x)
+            x = self.patchify(x)
+        else: 
+            x = self.decoder_MNIST(x)
 
         #return x.reshape((x.shape[0], ids_restore.shape[1], -1))
         return self.patchify(x)
@@ -389,7 +424,7 @@ class MAE_encoder(nn.Module):
         loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
         return loss
 
-    def forward(self, imgs, mask_ratio=0.75):
+    def forward(self, imgs, mask_ratio=0.5):
         whole_latent, latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio)
         pred = self.forward_decoder(latent, ids_restore)  # [N, L, p*p*3]
         loss = self.forward_loss(imgs, pred, mask)
@@ -404,14 +439,16 @@ class MAE(nn.Module):
                  patch_size=(4, 4),
                  in_chans=1,
                  embed_dim=16,
+                 embed_dim_out = 16,
                  depth=3,
                  num_heads=4,
                  dim_head=4,
+                 decoder='MNIST', 
                  decoder_embed_dim=16,
                  mlp_ratio=4.,
                  norm_pix_loss=False,
                  alpha=1,
-                 n_clusters=10,
+                 n_clusters=500,
                  pretrain_path='mae_gene.pkl'):
         super(MAE, self).__init__()
         self.alpha = alpha
@@ -428,8 +465,12 @@ class MAE(nn.Module):
             mlp_ratio=mlp_ratio,
             norm_pix_loss=norm_pix_loss)
         # cluster layer
-        self.cluster_layer = Parameter(torch.Tensor(n_clusters, patch_size[0] ** 2))
+        self.cluster_layer = Parameter(torch.Tensor(n_clusters, embed_dim_out))
         torch.nn.init.xavier_normal_(self.cluster_layer.data)
+        self.projection_head = nn.Sequential(
+                nn.Linear(embed_dim, embed_dim_out),
+                nn.ReLU(inplace=True)
+                )
 
     def pretrain(self, dataset, batch_size, lr, pretrain=True):
         if pretrain:
@@ -440,12 +481,13 @@ class MAE(nn.Module):
 
     def forward(self, x):
         z, loss, x_bar, mask = self.mae(x)
+        #z = self.projection_head(z)
         # cluster
         q = 1.0 / (1.0 + torch.sum(
             torch.pow(z.unsqueeze(1) - self.cluster_layer, 2), 2) / self.alpha)
         q = q.pow((self.alpha + 1.0) / 2.0)
         q = (q.t() / torch.sum(q, 1)).t()
-        return x_bar, z, loss, mask
+        return x_bar, z, loss, mask, q
 
 
 def target_distribution(q):
@@ -461,7 +503,7 @@ def pretrain_mae(model, dataset, batch_size, lr):
     x = data.unsqueeze(1)
     n_batch = x.size(0) // batch_size + 1
     optimizer = Adam(model.parameters(), lr=lr)
-    for epoch in range(5):
+    for epoch in range(20):
         total_loss = 0.
         new_idx = torch.randperm(x.size()[0])
         for batch in range(n_batch):
@@ -476,7 +518,7 @@ def pretrain_mae(model, dataset, batch_size, lr):
             optimizer.zero_grad()
             z, loss, _, _ = model(x_train)
             # loss = F.mse_loss(x_bar, x_train)
-            total_loss += loss.item()
+            total_loss = total_loss + loss.item()
 
             loss.backward()
             optimizer.step()
