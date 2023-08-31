@@ -19,6 +19,7 @@ def model(dataset, encoder, config):
     if dataset == 'Gene image':
         if encoder =='MAE':
             model = MAE(
+                decoder=config['decoder'],
                 img_size=config['img_size'],
                 patch_size=config['patch_size'],
                 in_chans=config['in_chans'],
@@ -31,6 +32,7 @@ def model(dataset, encoder, config):
                 norm_pix_loss=config['norm_pix_loss'],
                 alpha=config['alpha'],
                 n_clusters=config['n_clusters'],
+                embed_dim_out = config['embed_dim_out']
             )
     if dataset == 'MNIST':
         if encoder == 'CAE':
@@ -49,6 +51,7 @@ def model(dataset, encoder, config):
                 n_z = config['n_z'])
         if encoder == 'MAE':
             model = MAE(
+                decoder=config['decoder'],
                 img_size=config['img_size'],
                 patch_size=config['patch_size'],
                 in_chans=config['in_chans'],
