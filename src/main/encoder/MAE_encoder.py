@@ -17,6 +17,23 @@ MAE_encoder
 '''
 
 
+def contrastive_loss(out_1, out_2, temperature):
+    out = torch.cat([out_1, out_2], dim=0)
+    n_samples = len(out)
+
+    cov = torch.mm(out, out.t().contiguous())
+    sim = torch.exp(cov / temperature)
+
+    mask = ~torch.eye(n_samples, device=sim.device).bool()
+    neg = sim.masked_select(mask).view(n_samples, -1).sum(dim=-1)
+
+    pos = torch.exp(torch.sum(out_1 * out_2, dim=-1) / temperature)
+    pos = torch.cat([pos, pos], dim=0)
+
+    loss = -torch.log(pos / neg).mean()+0.000001
+    return loss
+
+
 class PatchEmbed(nn.Module):  # [B, 1, 72, 59]->[B, 252, embed_dim]
     def __init__(self, img_size=(72, 59), patch_size=(4, 4), in_chans=1, embed_dim=16):
         super(PatchEmbed, self).__init__()
@@ -283,6 +300,10 @@ class MAE_encoder(nn.Module):
         # --------------------------------------------------------------------------
 
         self.norm_pix_loss = norm_pix_loss
+        if self.decoder_type == 'MNIST':
+            self.pooling_weights = Parameter(torch.Tensor(49, 1))
+        else:
+            self.pooling_weights = Parameter(torch.Tensor(252, 1))
 
         self.initialize_weights()
 
@@ -303,6 +324,10 @@ class MAE_encoder(nn.Module):
         # timm's trunc_normal_(std=.02) is effectively normal_(std=0.02) as cutoff is too big (2.)
         # torch.nn.init.normal_(self.cls_token, std=.02)
         torch.nn.init.normal_(self.mask_token, std=.02)
+        if self.decoder_type == 'MNIST':
+            torch.nn.init.constant_(self.pooling_weights, 1/252)
+        else:
+            torch.nn.init.constant_(self.pooling_weights, 1/252)
 
         # initialize nn.Linear and nn.LayerNorm
         self.apply(self._init_weights)
@@ -399,7 +424,6 @@ class MAE_encoder(nn.Module):
         x = x.mean(dim=1)  # 32x16
         if self.decoder_type == 'Gene':
             x = self.decoder_Gene(x)
-            x = self.patchify(x)
         else: 
             x = self.decoder_MNIST(x)
 
@@ -417,18 +441,18 @@ class MAE_encoder(nn.Module):
             mean = target.mean(dim=-1, keepdim=True)
             var = target.var(dim=-1, keepdim=True)
             target = (target - mean) / (var + 1.e-6) ** .5
-
         loss = (pred - target) ** 2
         loss = loss.mean(dim=-1)  # [N, L], mean loss per patch
 
         loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
         return loss
 
-    def forward(self, imgs, mask_ratio=0.5):
+    def forward(self, imgs, mask_ratio=0.3):
         whole_latent, latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio)
         pred = self.forward_decoder(latent, ids_restore)  # [N, L, p*p*3]
         loss = self.forward_loss(imgs, pred, mask)
-        z = whole_latent.mean(dim=1)
+        #z = whole_latent.mean(dim=1)
+        z = torch.sum(torch.mul(whole_latent, self.pooling_weights), dim=1) / torch.sum(self.pooling_weights)
         return z, loss, pred, mask
 
 
@@ -462,13 +486,14 @@ class MAE(nn.Module):
             num_heads=num_heads,
             dim_head=dim_head,
             decoder_embed_dim=decoder_embed_dim,
+            decoder = decoder,
             mlp_ratio=mlp_ratio,
             norm_pix_loss=norm_pix_loss)
         # cluster layer
         self.cluster_layer = Parameter(torch.Tensor(n_clusters, embed_dim_out))
         torch.nn.init.xavier_normal_(self.cluster_layer.data)
         self.projection_head = nn.Sequential(
-                nn.Linear(embed_dim, embed_dim_out),
+                nn.Linear(embed_dim, 10),
                 nn.ReLU(inplace=True)
                 )
 
@@ -481,12 +506,12 @@ class MAE(nn.Module):
 
     def forward(self, x):
         z, loss, x_bar, mask = self.mae(x)
-        #z = self.projection_head(z)
         # cluster
         q = 1.0 / (1.0 + torch.sum(
             torch.pow(z.unsqueeze(1) - self.cluster_layer, 2), 2) / self.alpha)
         q = q.pow((self.alpha + 1.0) / 2.0)
         q = (q.t() / torch.sum(q, 1)).t()
+        #q = self.projection_head(z)
         return x_bar, z, loss, mask, q
 
 
@@ -503,7 +528,7 @@ def pretrain_mae(model, dataset, batch_size, lr):
     x = data.unsqueeze(1)
     n_batch = x.size(0) // batch_size + 1
     optimizer = Adam(model.parameters(), lr=lr)
-    for epoch in range(20):
+    for epoch in range(10):
         total_loss = 0.
         new_idx = torch.randperm(x.size()[0])
         for batch in range(n_batch):
@@ -514,11 +539,15 @@ def pretrain_mae(model, dataset, batch_size, lr):
             idx = idx.to(device)
 
             x_train = x[idx, :, :, :].to(device)
-
+            noise1 = torch.tensor(np.random.normal(0, 0.03, x_train.shape)).float()
+            noise1 = noise1.to(device)
             optimizer.zero_grad()
-            z, loss, _, _ = model(x_train)
+            z1, loss1, _, q1 = model(x_train+noise1)
+            z2, loss2, _, q2 = model(x_train)
             # loss = F.mse_loss(x_bar, x_train)
-            total_loss = total_loss + loss.item()
+            contras_loss = contrastive_loss(z1, z2, 70.)
+            loss = (loss1+loss2)/2 + 0.005*contras_loss.item()
+            total_loss = total_loss + loss.item() + 0.005*contras_loss.item()
 
             loss.backward()
             optimizer.step()
