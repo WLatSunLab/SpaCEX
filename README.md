@@ -2,7 +2,7 @@
 We develop the **SpaCEX** which utilize self-supervised learning on spatially co-expressed genes that can simultaneously identify spatially co-expressed genes and learn semantically meaningful gene embeddings from SRT data through a pretext task of gene clustering. **SpaCEX** first employs an image encoder to transform the spatial expression maps of genes into gene embeddings modeled by a Student’s t mixture distribution (SMM). Subsequently, a discriminatively boosted gene clustering algorithm is applied on the posterior soft assignments of genes to the mixture components, iteratively adapting the parameters of the encoder and the SMM. 
 # Outline of SpaCEX
 <p align="center">
-  <img src="https://github.com/WLatSunLab/SpaCEX/files/13587879/high.pdf](https://github.com/WLatSunLab/SpaCEX/assets/121435520/78eb358a-70d5-4036-bc08-85ff0041b8bc" width="900">
+  <img src="https://github.com/WLatSunLab/SpaCEX/assets/121435520/78eb358a-70d5-4036-bc08-85ff0041b8bc" width="900">
 </p>
 
 
