@@ -24,6 +24,7 @@ We develop the **SpaCEX** which utilize self-supervised learning on spatially co
 
 
 # Applicable tasks
+* Resolution enhancement
 * Identify spatially co-expressed and co-functional genes.
 * Predict gene-gene interactions.
 * Detect spatially variable genes.
