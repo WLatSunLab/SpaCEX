@@ -7,7 +7,7 @@ We develop the **SpaCEX** which utilize self-supervised learning on **Spa**tiall
 
 
 
-# Frame of SpaCEX
+# Framework of SpaCEX
 <p align="center">
   <img src="https://github.com/Shaw-Lab/SpaCEX/assets/121435520/97d5e386-5606-49a3-8b7e-4a3b1a921c4e.png" width="900">
 </p>
