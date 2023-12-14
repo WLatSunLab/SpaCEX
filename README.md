@@ -24,7 +24,8 @@ We develop the **SpaCEX** which utilize self-supervised learning on **Spa**tiall
 
 
 # Applicable tasks
-* Resolution enhancement
+* Enhancement of the transcriptomic coverage
+
 * Identify spatially co-expressed and co-functional genes.
 * Predict gene-gene interactions.
 * Detect spatially variable genes.
