@@ -1,9 +1,13 @@
 import torch
 import torch.nn as nn
+import SpaGCN as spg
+import scanpy as sc
 from SpaCEX.src.main import driver
 from SpaCEX.src.main.clustering.DEC import DEC
 from SpaCEX.src.main._config import Config
 import pandas as pd
+from tqdm import tqdm
+from scipy.sparse import csr_matrix
 import numpy as np
 import json
 import os
@@ -23,15 +27,59 @@ If you wanna get other return such as x_bar or parameters of SMM, just rewrite D
 '''
 
 class SpaCEX():
-    def train(dataset, total):
+    # please choose the 151676 for testing
+    def get_data(sample_id):
+        assert sample_id == '151676', "please choose the 151676 for testing"
+        path_file = f"SpaCEX/data/{sample_id}_10xvisium.h5ad"
+        adata = sc.read_h5ad(path_file)
+        
+        return adata
+    
+    def data_process(adata):
+        adata = adata[~adata.obs['layer_guess_reordered_short'].isna()]
+        adata = adata[~adata.obs['discard'].astype(bool), :]
+        adata.obs['cluster']  = adata.obs['layer_guess_reordered_short'] 
+        adata.var_names_make_unique()
+        spg.prefilter_genes(adata, min_cells=3)  # avoiding all genes are zeros
+        spg.prefilter_specialgenes(adata)
+        sc.pp.normalize_per_cell(adata)
+        sc.pp.log1p(adata)
+        all_genes = adata.var.index.values
+        adata.obs['array_x']=np.ceil((adata.obs['array_col']-
+                                  adata.obs['array_col'].min())/2).astype(int)
+        adata.obs['array_y']=adata.obs['array_row']-adata.obs['array_row'].min()
+        all_gene_exp_matrices = {}
+        shape = (adata.obs['array_y'].max()+1, adata.obs['array_x'].max()+1)
+        
+        for gene in tqdm(all_genes, desc="adata2image", unit="gene"):
+            g_matrix = np.zeros(shape=shape)
+            g = adata[:,gene].X.todense().tolist()
+            c = adata.obsm['spatial']
+            for i,row_col in enumerate(zip(adata.obs['array_y'],adata.obs['array_x'])):
+                
+                row_ix,col_ix = row_col
+                # print(f'{row_ix},{col_ix}')
+                g_matrix[row_ix,col_ix] = g[i][0]
+            all_gene_exp_matrices[gene] = csr_matrix(g_matrix)
+        all_gmat = {k:all_gene_exp_matrices[k].todense() for k in list(all_gene_exp_matrices.keys())}
+        dataset=np.array(list(all_gmat.values()))
+        
+        return dataset
+    
+    def train(dataset, dataset_denoise=None, total=None):
+        image_size = (dataset.shape[1], dataset.shape[2])
         config = Config(dataset='Gene image', model='MAE').get_parameters()
         cuda = torch.cuda.is_available()
         print("use cuda: {}".format(cuda))
         device = torch.device("cuda" if cuda else "cpu")
-        model = driver.model('Gene image', 'MAE', config)
+        model = driver.model('Gene image', 'MAE', config, image_size)
         model.to(device)
-        model.pretrain(dataset, batch_size=config['batch_size'], lr=config['lr'])
-        y_pred, embedding, model= DEC(model, dataset, total, config)
+        if config['decoder'] == 'Gene image':
+            model.pretrain(dataset = dataset, 
+                           dataset_denoise = dataset_denoise, 
+                           batch_size=config['batch_size'], 
+                           lr=config['lr'])
+        y_pred, z, model= DEC(model, dataset, total = total, config = config)
 
-        return y_pred, embedding, model
+        return y_pred, z
 
