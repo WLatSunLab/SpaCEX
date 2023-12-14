@@ -51,8 +51,9 @@ cd SpaCEX
 `SGEs` **S**paCEX **G**enerated **E**mbedding**s** 
 ```bash
 from SpaCEX.src.main.SpaCEX import SpaCEX
-
-y_pred, embedding, model = SpaCEX.train(dataset = dataset, total = total)
+sample_id = "151676"
+adata = SpaCEX
+cluster_label, SGEs = SpaCEX.train(dataset = dataset, total = total)
 ```
 # Others
 If you wanna get other return such as x_bar or parameters of SMM, just rewrite DEC to get what you want.
