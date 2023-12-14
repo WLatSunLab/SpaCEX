@@ -46,9 +46,7 @@ cd SpaCEX
 
 **What** you will get return:
 
-`model` encoder that haved been trained
-
-`y_pred` label that SpaCEX generative
+`cluster_label' label that SpaCEX generative
 
 `embedding` embedding that generatived by encoder
 ```bash
