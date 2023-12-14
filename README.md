@@ -48,7 +48,7 @@ cd SpaCEX
 
 `cluster_label' label that SpaCEX generative
 
-`embedding` embedding that generatived by encoder
+`SGEs` **S**paCEX **G**enerated **E**mbedding**s** 
 ```bash
 from SpaCEX.src.main.SpaCEX import SpaCEX
 
