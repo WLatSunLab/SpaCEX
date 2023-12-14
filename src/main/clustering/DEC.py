@@ -1,6 +1,7 @@
 import argparse
 import torch
 import numpy as np
+from tqdm import tqdm
 from sklearn.cluster import KMeans
 from sklearn.metrics.cluster import normalized_mutual_info_score as nmi_score
 from sklearn.metrics import adjusted_rand_score as ari_score
@@ -9,6 +10,7 @@ import torch.nn.functional as F
 from torch.nn.parameter import Parameter
 from torch.optim import Adam
 from torch.utils.data import DataLoader
+from SpaCEX.src.main.LH import likelihood, regularization, size
 from torch.nn import Linear
 
 
@@ -16,6 +18,27 @@ def target_distribution(q):
     weight = q**2 / q.sum(0)
     return (weight.t() / weight.sum(1)).t()
 
+class AutomaticWeightedLoss(nn.Module):
+    """automatically weighted multi-task loss
+    Params：
+        num: int，the number of loss
+        x: multi-task loss
+    Examples：
+        loss1=1
+        loss2=2
+        awl = AutomaticWeightedLoss(2)
+        loss_sum = awl(loss1, loss2)
+    """
+    def __init__(self, num=2):
+        super(AutomaticWeightedLoss, self).__init__()
+        params = torch.ones(num, requires_grad=True)
+        self.params = torch.nn.Parameter(params)
+
+    def forward(self, *x):
+        loss_sum = 0
+        for i, loss in enumerate(x):
+            loss_sum += 0.5 / (self.params[i] ** 2) * loss + torch.log(1 + self.params[i] ** 2)
+        return loss_sum
 
 def cluster_acc(y_true, y_pred):
     """
@@ -38,13 +61,15 @@ def cluster_acc(y_true, y_pred):
     return sum([w[i, j] for i, j in ind]) * 1.0 / y_pred.size
 
 
-def DEC(model, dataset, config):
+def DEC(model, dataset, total, config):
     cuda = torch.cuda.is_available()
     device = torch.device("cuda" if cuda else "cpu")
-    batch_size = config['batch_size']
-    train_loader = DataLoader(
-        dataset, batch_size=config['batch_size'], shuffle=False)
-    optimizer = Adam(model.parameters(), lr=config['lr'])
+    batch_size = 64
+    awl = AutomaticWeightedLoss(3)
+    optimizer = Adam([
+            {'params': model.parameters()},
+            {'params': awl.parameters(), 'weight_decay': 0}
+        ], lr=config['lr'])
     data = dataset
     #y = dataset.y
     data = torch.Tensor(data).to(device)
@@ -58,6 +83,7 @@ def DEC(model, dataset, config):
             for i in range(0, total_samples, batch_size):
                 batch_data = data[i:i+batch_size]  # Get a batch of data
                 batch_data = torch.Tensor(batch_data).to(device)
+                #_, batch_result_z, _, _, batch_result_q = model(batch_data)
                 _, batch_result_z, _, _, batch_result_q = model(batch_data)
                 z_part.append(batch_result_z)
                 q_part.append(batch_result_q)
@@ -65,21 +91,20 @@ def DEC(model, dataset, config):
         z = torch.cat(z_part, dim=0)
         q = torch.cat(q_part, dim=0)
 
-    #kmeans = KMeans(n_clusters=config['num_classes'], n_init=20)
-    #y_pred = kmeans.fit_predict(z.data.cpu().numpy())
-    y_pred = torch.argmax(q, dim=1)
-    #y_pred = y_pred.reshape(y.shape)
-    y_pred = y_pred.data.cpu().numpy()
-    #acc = cluster_acc(y, y_pred)
-    #print("acc ={:.4f}".format(acc))
+    kmeans = KMeans(n_clusters=config['num_classes'], init='k-means++', n_init=10)
+    y_pred = kmeans.fit_predict(z.data.cpu().numpy())
+
+    y_pred_count = torch.tensor(y_pred)
+    counts = torch.bincount(y_pred_count)
+    y_pred = np.array(y_pred)
     n_batch = data.size(0) // batch_size + 1
     total_samples = len(dataset)
     z = None
     
     y_pred_last = y_pred
-    #model.cluster_layer.data = torch.tensor(kmeans.cluster_centers_).to(device)
+    model.cluster_layer.data = torch.tensor(kmeans.cluster_centers_).to(device)
     model.train()
-    for epoch in range(15):
+    for epoch in tqdm(range(30), desc="Clustering"):
         if epoch % config['interval'] == 0:
             if config['model'] == 'MAE':       
                 total_samples = len(data)
@@ -90,7 +115,6 @@ def DEC(model, dataset, config):
                         batch_data = torch.Tensor(batch_data).to(device)
                         _, _, _, _, batch_result_tmp_q = model(batch_data)
                         tmp_q_part.append(batch_result_tmp_q)
-                # Concatenate the results along the batch dimension
                 tmp_q = torch.cat(tmp_q_part, dim=0)
             
             # update target distribution p
@@ -101,12 +125,8 @@ def DEC(model, dataset, config):
             delta_label = np.sum(y_pred != y_pred_last).astype(
                 np.float32) / y_pred.shape[0]
             y_pred_last = y_pred
-
-            #acc = cluster_acc(y, y_pred)
-            #nmi = nmi_score(y, y_pred)
-            #ari = ari_score(y, y_pred)
-            #print('Iter {}'.format(epoch), ':Acc {:.4f}'.format(acc),
-                  #', nmi {:.4f}'.format(nmi), ', ari {:.4f}'.format(ari))
+            y_pred_count = torch.tensor(y_pred_last)
+            counts = torch.bincount(y_pred_count)
 
             if epoch > 0 and delta_label < config['tol']:
                 print('delta_label {:.4f}'.format(delta_label), '< tol',
@@ -114,6 +134,10 @@ def DEC(model, dataset, config):
                 print('Reached tolerance threshold. Stopping training.')
                 break
         new_idx = torch.randperm(data.size()[0])
+        
+        total_kl_loss = 0.
+        total_reconstr_loss = 0.
+        total_size_loss = 0.
         for batch in range(n_batch):
             
             if batch < n_batch - 1:
@@ -123,14 +147,16 @@ def DEC(model, dataset, config):
                 
             x_train = data[idx, :, :, :]
             
-            x_bar, z, reconstr_loss, _, q = model(x_train )
-
-            #reconstr_loss = F.mse_loss(x_bar, x)
+            x_bar, z, reconstr_loss, _, q = model(x_train)
             kl_loss = F.kl_div(q.log(), p[idx])
-            loss = 0.1*kl_loss + reconstr_loss 
+            size_loss = size(q)
+            loss = awl(kl_loss, reconstr_loss)
 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            total_reconstr_loss = total_reconstr_loss + reconstr_loss.item()
+            total_kl_loss = total_kl_loss + kl_loss.item()
+            total_size_loss = total_size_loss + size_loss.item()
     
-    return y_pred_last
+    return y_pred_last, z, model
