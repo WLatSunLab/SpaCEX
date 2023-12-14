@@ -11,50 +11,51 @@ from torch.nn.parameter import Parameter
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from torch.nn import Linear
+from tqdm import tqdm
 
 '''
 MAE_encoder
 '''
+class ContrastiveLoss(nn.Module):
+    def __init__(self, batch_size, device='cuda', temperature=0.5):
+        super().__init__()
+        self.batch_size = batch_size
+        self.register_buffer("temperature", torch.tensor(temperature).to(device))
+        self.register_buffer("negatives_mask", (~torch.eye(batch_size * 2, batch_size * 2, dtype=bool).to(device)).float())
+        
+    def forward(self, emb_i, emb_j): # emb_i, emb_j 
+        z_i = F.normalize(emb_i, dim=1)     # (bs, dim)  --->  (bs, dim)
+        z_j = F.normalize(emb_j, dim=1)     # (bs, dim)  --->  (bs, dim)
 
+        representations = torch.cat([z_i, z_j], dim=0)          # repre: (2*bs, dim)
+        similarity_matrix = F.cosine_similarity(representations.unsqueeze(1), representations.unsqueeze(0), dim=2)      # simi_mat: (2*bs, 2*bs)
+        
+        sim_ij = torch.diag(similarity_matrix, self.batch_size)         # bs
+        sim_ji = torch.diag(similarity_matrix, -self.batch_size)        # bs
+        positives = torch.cat([sim_ij, sim_ji], dim=0)                  # 2*bs
+        
+        nominator = torch.exp(positives / self.temperature)             # 2*bs
+        denominator = self.negatives_mask * torch.exp(similarity_matrix / self.temperature)             # 2*bs, 2*bs
+    
+        loss_partial = -torch.log(nominator / torch.sum(denominator, dim=1))        # 2*bs
+        loss = torch.sum(loss_partial) / (2 * self.batch_size)
+        return loss
 
-def contrastive_loss(out_1, out_2, temperature):
-    out = torch.cat([out_1, out_2], dim=0)
-    n_samples = len(out)
-
-    cov = torch.mm(out, out.t().contiguous())
-    sim = torch.exp(cov / temperature)
-
-    mask = ~torch.eye(n_samples, device=sim.device).bool()
-    neg = sim.masked_select(mask).view(n_samples, -1).sum(dim=-1)
-
-    pos = torch.exp(torch.sum(out_1 * out_2, dim=-1) / temperature)
-    pos = torch.cat([pos, pos], dim=0)
-
-    loss = -torch.log(pos / neg).mean()+0.000001
-    return loss
 
 
 class PatchEmbed(nn.Module):  # [B, 1, 72, 59]->[B, 252, embed_dim]
-    def __init__(self, img_size=(72, 59), patch_size=(4, 4), in_chans=1, embed_dim=16):
+    def __init__(self, img_size=(77, 59), patch_size=(4, 4), in_chans=1, embed_dim=16):
         super(PatchEmbed, self).__init__()
 
         self.img_size = img_size
         self.patch_size = patch_size
         self.num_patches = (img_size[1] // patch_size[1]) * (img_size[0] // patch_size[0])
-
-        # kernel_size= Block size, that is, each block outputs a value, as if each block is flattened and processed using the same fully connected layer
-        # The input dimension is 3, and the output dimension is the block vector length
-        # Consistent with the original text: partition, flattening, full connection dimension reduction
-        # Output is [B, C, H, W]
-        # Output bits on MNIST [B, embed_dim, 7, 7]
-
         self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
 
     def forward(self, x):
         B, C, H, W = x.shape
         assert H == self.img_size[0] and W == self.img_size[1], \
             "Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
-        # [B, C, H, W] -> [B, C, H*W] ->[B, H*W, C]
         x = self.proj(x).flatten(2).transpose(2, 1)
         return x
 
@@ -178,8 +179,8 @@ def get_2d_sincos_pos_embed(embed_dim, grid_size, cls_token=False):
     return:
     pos_embed: [grid_size*grid_size, embed_dim] or [1+grid_size*grid_size, embed_dim] (w/ or w/o cls_token)
     """
-    grid_h = np.arange(grid_size, dtype=np.float32)
-    grid_w = np.arange(grid_size, dtype=np.float32)
+    grid_h = np.arange(grid_size, dtype=float)
+    grid_w = np.arange(grid_size, dtype=float)
     grid = np.meshgrid(grid_w, grid_h)  # here w goes first
     grid = np.stack(grid, axis=0)
 
@@ -208,7 +209,7 @@ def get_1d_sincos_pos_embed_from_grid(embed_dim, pos):
     out: (M, D)
     """
     assert embed_dim % 2 == 0
-    omega = np.arange(embed_dim // 2, dtype=np.float)
+    omega = np.arange(embed_dim // 2, dtype=float)
     omega /= embed_dim / 2.
     omega = 1. / 10000 ** omega  # (D/2,)
 
@@ -245,7 +246,6 @@ class MAE_encoder(nn.Module):
         # MAE encoder specifics
         self.patch_embed = PatchEmbed(img_size, patch_size, in_chans, embed_dim)  # Bx1x28x28->Bx49xemben_dim
         num_patches = self.patch_embed.num_patches
-        # self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, embed_dim),
                                       requires_grad=True)  # fixed sin-cos embedding
 
@@ -264,38 +264,25 @@ class MAE_encoder(nn.Module):
 
         # decoder
         self.decoder_type = decoder
-        self.decoder_MNIST = nn.Sequential(
-            nn.Linear(embed_dim, 128),
-            nn.ReLU(True),
-            nn.Linear(128,  3 * 3 * 32),
-            nn.ReLU(True),
-            nn.Unflatten(dim=1, unflattened_size=(32, 3, 3)),
-            nn.ConvTranspose2d(32, 16, 3, stride=2, output_padding=0),
-            nn.BatchNorm2d(16),
-            nn.ReLU(True),
-            nn.ConvTranspose2d(16, 8, 3, stride=2, padding=1, output_padding=1),
-            nn.BatchNorm2d(8),
-            nn.ReLU(True),
-            nn.ConvTranspose2d(8, 1, 3, stride=2, padding=1, output_padding=1),
-            nn.Upsample(size=([28, 28]))
-        )
-        
+        self.image_size = img_size
         self.decoder_Gene = nn.Sequential(
             nn.Linear(embed_dim, 128),
-            nn.ReLU(True),
-            nn.Linear(128, 9 * 7 * 32),
-            nn.ReLU(True),
-            nn.Unflatten(dim=1, unflattened_size=(32, 9, 7)),
-            nn.ConvTranspose2d(32, 16, 3, stride=2, output_padding=0),
-            nn.BatchNorm2d(16),
-            nn.ReLU(True),
-            nn.ConvTranspose2d(16, 8, 3, stride=2, padding=1, output_padding=1),
-            nn.BatchNorm2d(8),
-            nn.ReLU(True),
-            nn.ConvTranspose2d(8, 1, 3, stride=2, padding=1, output_padding=1),
-            nn.Upsample(size=([72, 59]))
+            nn.LayerNorm(128),
+            nn.LeakyReLU(),
+            nn.Linear(128, 256),
+            nn.LayerNorm(256),
+            nn.LeakyReLU(),
+            nn.Linear(256, 512),
         )
+            
+        self.decoder_idf = nn.Linear(embed_dim, 512)
         
+        self.defoder_sig = nn.Sequential(
+            nn.Linear(512, 1024),
+            nn.LayerNorm(1024),
+            nn.LeakyReLU(),
+            nn.Linear(1024, self.image_size[0]*self.image_size[1])
+        )
 
         # --------------------------------------------------------------------------
 
@@ -303,8 +290,7 @@ class MAE_encoder(nn.Module):
         if self.decoder_type == 'MNIST':
             self.pooling_weights = Parameter(torch.Tensor(49, 1))
         else:
-            self.pooling_weights = Parameter(torch.Tensor(252, 1))
-
+            self.pooling_weights = Parameter(torch.Tensor(((self.image_size[0]//4)*(self.image_size[1]//4)), 1))
         self.initialize_weights()
 
     def initialize_weights(self):
@@ -320,14 +306,11 @@ class MAE_encoder(nn.Module):
         # initialize patch_embed like nn.Linear (instead of nn.Conv2d)
         w = self.patch_embed.proj.weight.data
         torch.nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
-
-        # timm's trunc_normal_(std=.02) is effectively normal_(std=0.02) as cutoff is too big (2.)
-        # torch.nn.init.normal_(self.cls_token, std=.02)
         torch.nn.init.normal_(self.mask_token, std=.02)
         if self.decoder_type == 'MNIST':
-            torch.nn.init.constant_(self.pooling_weights, 1/252)
+            torch.nn.init.constant_(self.pooling_weights, 1/((self.image_size[0]//4)*(self.image_size[1]//4)))
         else:
-            torch.nn.init.constant_(self.pooling_weights, 1/252)
+            torch.nn.init.constant_(self.pooling_weights, 1/((self.image_size[0]//4)*(self.image_size[1]//4)))
 
         # initialize nn.Linear and nn.LayerNorm
         self.apply(self._init_weights)
@@ -411,9 +394,6 @@ class MAE_encoder(nn.Module):
         return x1, x, mask, ids_restore
 
     def forward_decoder(self, x, ids_restore):
-        # embed tokens
-        # x = self.decoder_embed(x)
-
         # append mask tokens to sequence
         mask_tokens = self.mask_token.repeat(x.shape[0], ids_restore.shape[1] - x.shape[1], 1)
         x_ = torch.cat([x[:, :, :], mask_tokens], dim=1)
@@ -421,13 +401,14 @@ class MAE_encoder(nn.Module):
 
         # add pos embed
         x = x + self.decoder_pos_embed
-        x = x.mean(dim=1)  # 32x16
-        if self.decoder_type == 'Gene':
-            x = self.decoder_Gene(x)
-        else: 
-            x = self.decoder_MNIST(x)
-
-        #return x.reshape((x.shape[0], ids_restore.shape[1], -1))
+        x = x.mean(dim=1) 
+        if self.decoder_type == 'Gene image':
+            x1 = self.decoder_Gene(x)
+            idf = self.decoder_idf(x)
+            x = x1+idf
+            x = self.defoder_sig(x)
+            x = x.view(-1, 1, self.image_size[0], self.image_size[1])
+        
         return self.patchify(x)
 
     def forward_loss(self, imgs, pred, mask):
@@ -451,7 +432,6 @@ class MAE_encoder(nn.Module):
         whole_latent, latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio)
         pred = self.forward_decoder(latent, ids_restore)  # [N, L, p*p*3]
         loss = self.forward_loss(imgs, pred, mask)
-        #z = whole_latent.mean(dim=1)
         z = torch.sum(torch.mul(whole_latent, self.pooling_weights), dim=1) / torch.sum(self.pooling_weights)
         return z, loss, pred, mask
 
@@ -459,7 +439,7 @@ class MAE_encoder(nn.Module):
 class MAE(nn.Module):
 
     def __init__(self,
-                 img_size=(72, 59),
+                 img_size=(77, 59),
                  patch_size=(4, 4),
                  in_chans=1,
                  embed_dim=16,
@@ -493,25 +473,28 @@ class MAE(nn.Module):
         self.cluster_layer = Parameter(torch.Tensor(n_clusters, embed_dim_out))
         torch.nn.init.xavier_normal_(self.cluster_layer.data)
         self.projection_head = nn.Sequential(
-                nn.Linear(embed_dim, 10),
-                nn.ReLU(inplace=True)
+                nn.Linear(embed_dim, 32),
+                nn.LayerNorm(32),
+                nn.LeakyReLU(),
+                nn.Linear(32, 64)
                 )
 
-    def pretrain(self, dataset, batch_size, lr, pretrain=True):
+    def pretrain(self, dataset, dataset_denoise, batch_size, lr, pretrain=True):
         if pretrain:
-            pretrain_mae(self.mae, dataset, batch_size, lr)
+            pretrain_mae(self.mae, dataset, dataset_denoise, batch_size, lr)
         # load pretrain weights
         self.mae.load_state_dict(torch.load(self.pretrain_path))
         print('load pretrained mae from', self.pretrain_path)
 
     def forward(self, x):
         z, loss, x_bar, mask = self.mae(x)
+        z = self.projection_head(z)
         # cluster
         q = 1.0 / (1.0 + torch.sum(
             torch.pow(z.unsqueeze(1) - self.cluster_layer, 2), 2) / self.alpha)
         q = q.pow((self.alpha + 1.0) / 2.0)
         q = (q.t() / torch.sum(q, 1)).t()
-        #q = self.projection_head(z)
+        
         return x_bar, z, loss, mask, q
 
 
@@ -519,17 +502,44 @@ def target_distribution(q):
     weight = q ** 2 / q.sum(0)
     return (weight.t() / weight.sum(1)).t()
 
+class AutomaticWeightedLoss(nn.Module):
+    """automatically weighted multi-task loss
+    Params：
+        num: int，the number of loss
+        x: multi-task loss
+    Examples：
+        loss1=1
+        loss2=2
+        awl = AutomaticWeightedLoss(2)
+        loss_sum = awl(loss1, loss2)
+    """
+    def __init__(self, num=2):
+        super(AutomaticWeightedLoss, self).__init__()
+        params = torch.ones(num, requires_grad=True)
+        self.params = torch.nn.Parameter(params)
 
-def pretrain_mae(model, dataset, batch_size, lr):
+    def forward(self, *x):
+        loss_sum = 0
+        for i, loss in enumerate(x):
+            loss_sum += 0.5 / (self.params[i] ** 2) * loss + torch.log(1 + self.params[i] ** 2)
+        return loss_sum
+
+def pretrain_mae(model, dataset, dataset_denoise, batch_size, lr):
     cuda = torch.cuda.is_available()
     device = torch.device("cuda" if cuda else "cpu")
     batch_size = batch_size
     data = torch.Tensor(dataset).to(device)
     x = data.unsqueeze(1)
     n_batch = x.size(0) // batch_size + 1
-    optimizer = Adam(model.parameters(), lr=lr)
-    for epoch in range(10):
+    awl = AutomaticWeightedLoss(2)
+    optimizer = Adam([
+                {'params': model.parameters()},
+                {'params': awl.parameters(), 'weight_decay': 0}
+            ], lr=lr)
+    for epoch in tqdm(range(40), desc="Pretraining"):
         total_loss = 0.
+        total_contras_loss = 0.
+        total_contro_loss = 0.
         new_idx = torch.randperm(x.size()[0])
         for batch in range(n_batch):
             if batch < n_batch - 1:
@@ -539,19 +549,15 @@ def pretrain_mae(model, dataset, batch_size, lr):
             idx = idx.to(device)
 
             x_train = x[idx, :, :, :].to(device)
-            noise1 = torch.tensor(np.random.normal(0, 0.03, x_train.shape)).float()
-            noise1 = noise1.to(device)
             optimizer.zero_grad()
-            z1, loss1, _, q1 = model(x_train+noise1)
             z2, loss2, _, q2 = model(x_train)
-            # loss = F.mse_loss(x_bar, x_train)
-            contras_loss = contrastive_loss(z1, z2, 70.)
-            loss = (loss1+loss2)/2 + 0.005*contras_loss.item()
-            total_loss = total_loss + loss.item() + 0.005*contras_loss.item()
-
+            
+            contro_loss = loss2
+            
+            loss = contro_loss
+            total_loss = total_loss + loss.item()
             loss.backward()
             optimizer.step()
-        print("epoch {} loss={:.4f}".format(epoch,
-                                            total_loss / (batch + 1)))
-        torch.save(model.state_dict(), 'mae_gene.pkl')
-    print("model saved to {}.".format('mae_gene.pkl'))
+
+        torch.save(model.state_dict(), 'mae_gene22.pkl')
+    print("model saved to {}.".format('mae_gene22.pkl'))
