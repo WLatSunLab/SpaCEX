@@ -34,27 +34,10 @@ We develop the **SpaCEX** which utilize self-supervised learning on **Spa**tiall
 You can download the package from GitHub and install it locally:
 ```bash
 git clone https://github.com/WLatSunLab/SpaCEX.git
-cd SpaCEX
 ```
 
 # Getting Started
-**What** you should input:
-
-`dataset` gene image data with size [N, 1, 72, 59]
-
-`total` gene similarity matrix with size [N, N]
-
-**What** you will get return:
-
-`cluster_label' label that SpaCEX generative
-
-`SGEs` **S**paCEX **G**enerated **E**mbedding**s** 
-```bash
-from SpaCEX.src.main.SpaCEX import SpaCEX
-sample_id = "151676"
-adata = SpaCEX
-cluster_label, SGEs = SpaCEX.train(dataset = dataset, total = total)
-```
+The tutorial included in the repository provides guidance on how to effectively utilize SpaCEX.
 # Others
 If you wanna get other return such as x_bar or parameters of SMM, just rewrite DEC to get what you want.
 
