@@ -36,7 +36,7 @@ You can download the package from GitHub and install it locally:
 git clone https://github.com/WLatSunLab/SpaCEX.git
 ```
 # Sampledata
-Sample data include 10x-hDLPFC-151676, 10x-mEmb, seq-mEmb can be fund here(https://drive.google.com/drive/folders/1C3Gk-HVYp2dQh4id8H68M9p8IWEOIut_?usp=drive_link) .
+Sample data include 10x-hDLPFC-151676, 10x-mEmb, seq-mEmb can be fund [here](https://drive.google.com/drive/folders/1C3Gk-HVYp2dQh4id8H68M9p8IWEOIut_?usp=drive_link) .
 # Getting Started
 The tutorial included in the repository provides guidance on how to effectively utilize SpaCEX.
 # Others
