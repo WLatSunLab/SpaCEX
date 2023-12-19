@@ -7,25 +7,28 @@ We develop the **SpaCEX** which utilize self-supervised learning on **Spa**tiall
 </p>
 
 # Dependencies
-* Python = 3.9.15
-* torch = 1.13.0
-* rpy2 = 3.5.13
-* sklearn = 1.2.0
-* scanpy = 1.9.3
-* scipy = 1.9.3
-* pandas = 1.5.2
-* numpy = 1.21.6
-* sympy = 1.11.1
-* SpaGCN = 1.2.7
-* anndata = 0.10.3
-
+```
+[Python 3.9.15]
+[torch 1.13.0]
+[rpy2 3.5.13]
+[sklearn 1.2.0]
+[scanpy 1.9.3]
+[scipy 1.9.3]
+[pandas 1.5.2]
+[numpy 1.21.6]
+[sympy 1.11.1]
+[SpaGCN 1.2.7]
+[anndata 0.10.3]
+```
 
 # Applicable tasks
+```
 * Enhancement of the transcriptomic coverage.
 * Identify spatially co-expressed and co-functional genes.
 * Predict gene-gene interactions.
 * Detect spatially variable genes.
 * Cluster spatial spots into tissue domains.
+```
 
 # Installation
 You can download the package from GitHub and install it locally:
