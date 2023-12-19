@@ -48,7 +48,7 @@ Sample data include 10x-hDLPFC-151676, 10x-mEmb, seq-mEmb can be fund [here](htt
 
 ```
 # Getting Started
-The [tutorial](SpaCEX_ETC.ipynb) included in the repository provides guidance on how to effectively utilize SpaCEX.
+The [tutorial](SpaCEX_tutorial.html) included in the repository provides guidance on how to effectively utilize SpaCEX.
 # Others
 The tutorial will continue to receive ongoing updates for a more detailed and comprehensive guide, along with an refined model.
 
