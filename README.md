@@ -3,7 +3,7 @@ We develop the **SpaCEX** which utilize self-supervised learning on **Spa**tiall
 # Overview of SpaCEX
 
 <p align="center">
-  <img src="https://github.com/WLatSunLab/SpaCEX/assets/121435520/01cde816-a104-49fe-a875-abc34f6aac1e" width="700">
+  <img src="https://github.com/WLatSunLab/SpaCEX/assets/121435520/69c74478-ac8a-40d1-95c4-8ee9d069b253" width="700">
 </p>
 
 # Dependencies
