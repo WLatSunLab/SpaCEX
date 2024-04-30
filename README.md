@@ -53,7 +53,5 @@ Sample data including 10x-hDLPFC-151676, 10x-mEmb, seq-mEmb can be found [here](
 
 ```
 # Getting Started
-The [tutorial](https://zipging.github.io/-SpaCEX-.github.io/) included in the repository provides guidance on how to effectively utilize SpaCEX.
-# Others
-The tutorial will continue to receive ongoing updates for a more detailed and comprehensive guide, along with an refined model.
+The [tutorial](https://zipging.github.io/SpaCEX.github.io/) included in the repository provides guidance on how to effectively utilize SpaCEX and it is continually being refined to better present the paper.
 
