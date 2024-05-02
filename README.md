@@ -29,6 +29,7 @@ We develop the **SpaCEX** which utilize self-supervised learning on **Spa**tiall
 * Predict gene-gene interactions.
 * Detect spatially variable genes.
 * Cluster spatial spots into tissue domains.
+...
 ```
 
 # Installation
