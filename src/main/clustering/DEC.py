@@ -364,4 +364,4 @@ def DEC(model, dataset, config):
     Theta_prev, clusters, xi_i_k_history = EM_algorithm(z, K, Theta_prev, alpha0_hat, m0_hat, kappa0_hat, S0_hat, rho0_hat, clusters,max_iterations=0, config=config, tol=5 * 1e-3)
     y_pred_last = clusters
     
-    return y_pred_last, z, model
+    return z, model
