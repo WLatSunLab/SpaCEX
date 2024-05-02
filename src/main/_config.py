@@ -50,7 +50,7 @@ class Config:
                     'patch_size': (4, 4),  # patch size, dlpfc is [4, 4]
                     'in_chans': 1,  # image channel, dlpfc is 1
                     'embed_dim': 16,  # embedding dim，p**2*channel
-                    'embed_dim_out': 20,
+                    'embed_dim_out': 16,
                     'depth': 5,  # number of transformer
                     'num_heads': 4,  # multi-head
                     'dim_head': 4,  # head dim in multi-head attention
