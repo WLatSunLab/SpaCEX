@@ -1,4 +1,4 @@
-from SpaCEX.src.main.SpaCEX_ETC.src.main.encoder.MAE_encoder import MAE
+from SpaCEX.src.main.encoder.MAE_encoder import MAE
 
 
 '''
@@ -14,12 +14,13 @@ model = model('CAE')
 '''
 
 
-def model(dataset, encoder, config):
+def model(dataset, encoder, config, image_size):
     if dataset == 'Gene image':
         if encoder =='MAE':
             model = MAE(
                 decoder=config['decoder'],
-                img_size=config['img_size'],
+                #img_size=config['img_size'],
+                img_size = image_size,
                 patch_size=config['patch_size'],
                 in_chans=config['in_chans'],
                 embed_dim=config['embed_dim'],

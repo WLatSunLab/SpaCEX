@@ -23,51 +23,49 @@ def EM_algorithm(X, K,
                  config,
                  tol=5 * 1e-3):
     
-    X = X.to('cuda:1')
-    alpha0_hat = torch.tensor(alpha0_hat).to('cuda:1')
-    m0_hat = torch.tensor(m0_hat).to('cuda:1')
-    kappa0_hat = torch.tensor(kappa0_hat).to('cuda:1')
-    S0_hat = torch.tensor(S0_hat).to('cuda:1')
-    rho0_hat = torch.tensor(rho0_hat).to('cuda:1')
-    clusters = torch.tensor(clusters).to('cuda:1')
+    X = X.to('cuda')
+    alpha0_hat = torch.tensor(alpha0_hat).to('cuda')
+    m0_hat = torch.tensor(m0_hat).to('cuda')
+    kappa0_hat = torch.tensor(kappa0_hat).to('cuda')
+    S0_hat = torch.tensor(S0_hat).to('cuda')
+    rho0_hat = torch.tensor(rho0_hat).to('cuda')
+    clusters = torch.tensor(clusters).to('cuda')
     
     N = len(X)
-    xi_i_k = calculate_xi(X, Theta_prev,clusters)
+    xi_i_k = calculate_xi(X, Theta_prev)
     xi_i_k_history = [xi_i_k] 
     a = time.time()
     for i in range(max_iterations):
-        #print('iterations', i)
-        Theta_prev = update_SMM_parameters(X, Theta_prev, alpha0_hat, m0_hat, kappa0_hat, S0_hat, rho0_hat,xi_i_k)  # 更新参数
-        xi_i_k = calculate_xi(X, Theta_prev,clusters)
-        clusters_new = torch.argmax(xi_i_k, dim=1)
+        print('iterations', i)
+        Theta_prev = update_SMM_parameters(X, Theta_prev, alpha0_hat, m0_hat, kappa0_hat, S0_hat, rho0_hat)  # 更新参数
+        clusters_new = assign_clusters(X, Theta_prev)
+
         # Tolerance discrimination
         if i > 0 and torch.sum((clusters_new - clusters) != 0) / N < tol:
             break
 
         clusters = clusters_new
-
+        counts = torch.bincount(clusters)
+        #print(counts)
         xi_i_k_history.append(xi_i_k)  
     b = time.time()
+    print(b-a, 'five00', (b-a)*50)
     if max_iterations > 0:
         s = torch.unique(clusters)
         ss = []
         for i in s:
-            if torch.sum(clusters == i) > N // 50:
+            if torch.sum(clusters == i) > N // 5:
                 ss.append(i)
         ss = torch.tensor(ss)
         if len(s) < config['num_classes'] and len(ss)!=0:
             for i in range(config['num_classes']):
                 if i not in s:
                     j = ss[torch.randint(high=len(ss), size=(1,))]
-                    Theta_prev[i]['mu'] = 0.99*Theta_prev[j]['mu']
-                    Theta_prev[i]['pai'] = 0.99*Theta_prev[j]['pai']
-                    Theta_prev[i]['sigma'] = 0.981*Theta_prev[j]['sigma']
-                    Theta_prev[i]['v'] = 0.99*Theta_prev[j]['v']
+                    Theta_prev[i] = Theta_prev[j]
 
             #print('Reassign {}'.format(config['num_classes'] - len(s)), 'clusters')
-        xi_i_k = calculate_xi(X, Theta_prev,clusters)
-        xi_i_k_history.append(xi_i_k) 
-        clusters = torch.argmax(xi_i_k, dim=1)
+    
+    
 
     return Theta_prev, clusters, xi_i_k_history
 

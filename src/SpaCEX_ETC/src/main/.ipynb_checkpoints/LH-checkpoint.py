@@ -3,7 +3,7 @@ import torch
 def likelihood(e, ceta):
     e = torch.log(e @ ceta).sum() / e.size(0)
 
-    return -e
+    return e
 
 
 # Lsep
@@ -25,13 +25,13 @@ def regularization(h, lap_mat):
 def size(q):
     n = q.size()[0]
     n_clust = q.size()[1]
-    p1 = torch.zeros((n_clust,)).to('cuda:1')
+    p1 = torch.zeros((n_clust,)).to('cuda')
     p1 = torch.sum(q, dim=0) / n
     #for i in range(n_clust):
         #if p1[i] > 1 / 3000:
             #p1[i] = 1
 
-    return -(torch.sum((-p1) * torch.log(p1)))
+    return torch.sum((-p1) * torch.log(p1))
 
 
 def R(sigma):

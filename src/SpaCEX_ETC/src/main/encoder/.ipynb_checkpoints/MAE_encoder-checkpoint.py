@@ -11,19 +11,18 @@ from torch.nn.parameter import Parameter
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from torch.nn import Linear
-from tqdm import tqdm
 
 '''
 MAE_encoder
 '''
 class ContrastiveLoss(nn.Module):
-    def __init__(self, batch_size, device='cuda:1', temperature=0.5):
+    def __init__(self, batch_size, device='cuda', temperature=0.5):
         super().__init__()
         self.batch_size = batch_size
-        self.register_buffer("temperature", torch.tensor(temperature).to(device))
-        self.register_buffer("negatives_mask", (~torch.eye(batch_size * 2, batch_size * 2, dtype=bool).to(device)).float())
+        self.register_buffer("temperature", torch.tensor(temperature).to(device))			# 超参数 温度
+        self.register_buffer("negatives_mask", (~torch.eye(batch_size * 2, batch_size * 2, dtype=bool).to(device)).float())		# 主对角线为0，其余位置全#为1的mask矩阵
         
-    def forward(self, emb_i, emb_j): # emb_i, emb_j 
+    def forward(self, emb_i, emb_j):		# emb_i, emb_j 是来自同一图像的两种不同的预处理方法得到
         z_i = F.normalize(emb_i, dim=1)     # (bs, dim)  --->  (bs, dim)
         z_j = F.normalize(emb_j, dim=1)     # (bs, dim)  --->  (bs, dim)
 
@@ -43,19 +42,27 @@ class ContrastiveLoss(nn.Module):
 
 
 
-class PatchEmbed(nn.Module):  # [B, 1, 72, 59]->[B, 252, embed_dim]
-    def __init__(self, img_size=(77, 59), patch_size=(4, 4), in_chans=1, embed_dim=16):
+class PatchEmbed(nn.Module):  # [B, 1, 35, 30]->[B, 56, embed_dim]
+    def __init__(self, img_size=(35, 30), patch_size=(4, 4), in_chans=1, embed_dim=64):
         super(PatchEmbed, self).__init__()
 
         self.img_size = img_size
         self.patch_size = patch_size
         self.num_patches = (img_size[1] // patch_size[1]) * (img_size[0] // patch_size[0])
+
+        # kernel_size= Block size, that is, each block outputs a value, as if each block is flattened and processed using the same fully connected layer
+        # The input dimension is 3, and the output dimension is the block vector length
+        # Consistent with the original text: partition, flattening, full connection dimension reduction
+        # Output is [B, C, H, W]
+        # Output bits on MNIST [B, embed_dim, 7, 7]
+
         self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
 
     def forward(self, x):
         B, C, H, W = x.shape
         assert H == self.img_size[0] and W == self.img_size[1], \
             "Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
+        # [B, C, H, W] -> [B, C, H*W] ->[B, H*W, C]
         x = self.proj(x).flatten(2).transpose(2, 1)
         return x
 
@@ -179,8 +186,8 @@ def get_2d_sincos_pos_embed(embed_dim, grid_size, cls_token=False):
     return:
     pos_embed: [grid_size*grid_size, embed_dim] or [1+grid_size*grid_size, embed_dim] (w/ or w/o cls_token)
     """
-    grid_h = np.arange(grid_size, dtype=float)
-    grid_w = np.arange(grid_size, dtype=float)
+    grid_h = np.arange(grid_size, dtype=np.float32)
+    grid_w = np.arange(grid_size, dtype=np.float32)
     grid = np.meshgrid(grid_w, grid_h)  # here w goes first
     grid = np.stack(grid, axis=0)
 
@@ -229,14 +236,14 @@ class MAE_encoder(nn.Module):
     """
 
     def __init__(self,
-                 img_size=(28, 28),
+                 img_size=(35, 30),
                  patch_size=(4, 4),
                  in_chans=1,
                  embed_dim=16,
                  depth=3,
                  num_heads=4,
                  dim_head=4,
-                 decoder = 'MNIST',
+                 decoder = 'Mouse image',
                  decoder_embed_dim=16,
                  mlp_ratio=4.,
                  norm_pix_loss=False):
@@ -244,8 +251,9 @@ class MAE_encoder(nn.Module):
 
         # --------------------------------------------------------------------------
         # MAE encoder specifics
-        self.patch_embed = PatchEmbed(img_size, patch_size, in_chans, embed_dim)  # Bx1x28x28->Bx49xemben_dim
+        self.patch_embed = PatchEmbed(img_size, patch_size, in_chans, embed_dim)  # Bx1x116x37->Bx49x16
         num_patches = self.patch_embed.num_patches
+        # self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, embed_dim),
                                       requires_grad=True)  # fixed sin-cos embedding
 
@@ -264,15 +272,47 @@ class MAE_encoder(nn.Module):
 
         # decoder
         self.decoder_type = decoder
-        self.image_size = img_size
-        self.decoder_Gene = nn.Sequential(
+        self.decoder_MNIST = nn.Sequential(
+            nn.Linear(embed_dim, 64),
+            nn.ReLU(True),
+            nn.Linear(64,  2 * 2 * 32),
+            nn.ReLU(True),
+            nn.Unflatten(dim=1, unflattened_size=(32, 2, 2)),
+            nn.ConvTranspose2d(32, 16, 3, stride=2, output_padding=0),
+            nn.BatchNorm2d(16),
+            nn.ReLU(True),
+            nn.ConvTranspose2d(16, 8, 3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(8),
+            nn.ReLU(True),
+            nn.ConvTranspose2d(8, 1, 3, stride=2, padding=1, output_padding=1),
+            nn.Upsample(size=([17, 20]))
+        )
+        '''
+        self.decoder_Mouse = nn.Sequential(
+            nn.Linear(embed_dim, 64),
+            nn.ReLU(True),
+            nn.Linear(64, 5 * 5 * 16),
+            nn.ReLU(True),
+            nn.Unflatten(dim=1, unflattened_size=(16, 5, 5)),
+            #nn.ConvTranspose2d(32, 16, 3, stride=2, padding=0,output_padding=0),
+            #nn.BatchNorm2d(16),
+            #nn.ReLU(True),
+            nn.ConvTranspose2d(16, 8, 3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(8),
+            nn.ReLU(True),
+            nn.ConvTranspose2d(8, 1, 3, stride=2, padding=1, output_padding=1),
+            nn.Upsample(size=([17, 20]))
+        )
+        '''
+        
+        self.decoder_Mouse = nn.Sequential(
             nn.Linear(embed_dim, 128),
             nn.LayerNorm(128),
             nn.LeakyReLU(),
             nn.Linear(128, 256),
             nn.LayerNorm(256),
             nn.LeakyReLU(),
-            nn.Linear(256, 512),
+            nn.Linear(256, 512)
         )
             
         self.decoder_idf = nn.Linear(embed_dim, 512)
@@ -281,16 +321,20 @@ class MAE_encoder(nn.Module):
             nn.Linear(512, 1024),
             nn.LayerNorm(1024),
             nn.LeakyReLU(),
-            nn.Linear(1024, self.image_size[0]*self.image_size[1])
+            nn.Linear(1024, 35*30)
         )
+
+        
+        
 
         # --------------------------------------------------------------------------
 
         self.norm_pix_loss = norm_pix_loss
-        if self.decoder_type == 'MNIST':
-            self.pooling_weights = Parameter(torch.Tensor(49, 1))
+        if self.decoder_type == 'Mouse image':
+            self.pooling_weights = Parameter(torch.Tensor(56, 1))
         else:
-            self.pooling_weights = Parameter(torch.Tensor(((self.image_size[0]//4)*(self.image_size[1]//4)), 1))
+            self.pooling_weights = Parameter(torch.Tensor(56, 1))
+
         self.initialize_weights()
 
     def initialize_weights(self):
@@ -306,11 +350,14 @@ class MAE_encoder(nn.Module):
         # initialize patch_embed like nn.Linear (instead of nn.Conv2d)
         w = self.patch_embed.proj.weight.data
         torch.nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
+
+        # timm's trunc_normal_(std=.02) is effectively normal_(std=0.02) as cutoff is too big (2.)
+        # torch.nn.init.normal_(self.cls_token, std=.02)
         torch.nn.init.normal_(self.mask_token, std=.02)
-        if self.decoder_type == 'MNIST':
-            torch.nn.init.constant_(self.pooling_weights, 1/((self.image_size[0]//4)*(self.image_size[1]//4)))
+        if self.decoder_type == 'Mouse image':
+            torch.nn.init.constant_(self.pooling_weights, 1/56)
         else:
-            torch.nn.init.constant_(self.pooling_weights, 1/((self.image_size[0]//4)*(self.image_size[1]//4)))
+            torch.nn.init.constant_(self.pooling_weights, 1/56)
 
         # initialize nn.Linear and nn.LayerNorm
         self.apply(self._init_weights)
@@ -331,8 +378,8 @@ class MAE_encoder(nn.Module):
         x: (N, L, patch_size**2 *1)
         """
         p = self.patch_embed.patch_size[0]  # 4
-        h = imgs.shape[2] // p  # 18
-        w = imgs.shape[3] // p  # 14
+        h = imgs.shape[2] // p  # 4
+        w = imgs.shape[3] // p  # 5
         imgs = imgs[:, :, :h * p, :w * p]  # [:, :, :18, :14]
         x = imgs.reshape(shape=(imgs.shape[0], 1, h, p, w, p))
         x = torch.einsum('nchpwq->nhwpqc', x)
@@ -394,6 +441,9 @@ class MAE_encoder(nn.Module):
         return x1, x, mask, ids_restore
 
     def forward_decoder(self, x, ids_restore):
+        # embed tokens
+        # x = self.decoder_embed(x)
+
         # append mask tokens to sequence
         mask_tokens = self.mask_token.repeat(x.shape[0], ids_restore.shape[1] - x.shape[1], 1)
         x_ = torch.cat([x[:, :, :], mask_tokens], dim=1)
@@ -401,14 +451,17 @@ class MAE_encoder(nn.Module):
 
         # add pos embed
         x = x + self.decoder_pos_embed
-        x = x.mean(dim=1) 
-        if self.decoder_type == 'Gene image':
-            x1 = self.decoder_Gene(x)
+        x = x.mean(dim=1)  # 32x16
+        if self.decoder_type == 'Mouse image':
+            x1 = self.decoder_Mouse(x)
             idf = self.decoder_idf(x)
             x = x1+idf
             x = self.defoder_sig(x)
-            x = x.view(-1, 1, self.image_size[0], self.image_size[1])
-        
+            x = x.view(-1, 1, 35, 30)
+        else: 
+            x = self.decoder_MNIST(x)
+
+        #return x.reshape((x.shape[0], ids_restore.shape[1], -1))
         return self.patchify(x)
 
     def forward_loss(self, imgs, pred, mask):
@@ -430,8 +483,9 @@ class MAE_encoder(nn.Module):
 
     def forward(self, imgs, mask_ratio=0.3):
         whole_latent, latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio)
-        pred = self.forward_decoder(latent, ids_restore)  # [N, L, p*p*3]
+        pred = self.forward_decoder(latent, ids_restore)  # [N, L, p*p*1]
         loss = self.forward_loss(imgs, pred, mask)
+        #z = whole_latent.mean(dim=1)
         z = torch.sum(torch.mul(whole_latent, self.pooling_weights), dim=1) / torch.sum(self.pooling_weights)
         return z, loss, pred, mask
 
@@ -439,21 +493,21 @@ class MAE_encoder(nn.Module):
 class MAE(nn.Module):
 
     def __init__(self,
-                 img_size=(77, 59),
+                 img_size=(35, 30),
                  patch_size=(4, 4),
                  in_chans=1,
-                 embed_dim=16,
-                 embed_dim_out = 16,
+                 embed_dim=32,
+                 embed_dim_out = 32,
                  depth=3,
                  num_heads=4,
                  dim_head=4,
-                 decoder='MNIST', 
-                 decoder_embed_dim=16,
+                 decoder='Mouse image', 
+                 decoder_embed_dim=32,
                  mlp_ratio=4.,
                  norm_pix_loss=False,
                  alpha=1,
                  n_clusters=500,
-                 pretrain_path='SpaCEX/model_pretrained/SpaCEX.pkl'):
+                 pretrain_path='mae_mouse_gene.pkl'):
         super(MAE, self).__init__()
         self.alpha = alpha
         self.pretrain_path = pretrain_path
@@ -476,12 +530,12 @@ class MAE(nn.Module):
                 nn.Linear(embed_dim, 32),
                 nn.LayerNorm(32),
                 nn.LeakyReLU(),
-                nn.Linear(32, embed_dim_out)
+                nn.Linear(32, 64)
                 )
 
-    def pretrain(self, dataset, batch_size, lr, pretrain=True):
+    def pretrain(self, dataset, dataset_denoise, batch_size, lr, pretrain=True):
         if pretrain:
-            pretrain_mae(self.mae, dataset, batch_size, lr, self.pretrain_path)
+            pretrain_mae(self.mae, dataset, dataset_denoise, batch_size, lr)
         # load pretrain weights
         self.mae.load_state_dict(torch.load(self.pretrain_path))
         print('load pretrained mae from', self.pretrain_path)
@@ -524,9 +578,9 @@ class AutomaticWeightedLoss(nn.Module):
             loss_sum += 0.5 / (self.params[i] ** 2) * loss + torch.log(1 + self.params[i] ** 2)
         return loss_sum
 
-def pretrain_mae(model, dataset, batch_size, lr, pretrain_path):
+def pretrain_mae(model, dataset, dataset_denoise, batch_size, lr):
     cuda = torch.cuda.is_available()
-    device = torch.device("cuda:1" if cuda else "cpu")
+    device = torch.device("cuda" if cuda else "cpu")
     batch_size = batch_size
     data = torch.Tensor(dataset).to(device)
     x = data.unsqueeze(1)
@@ -534,11 +588,9 @@ def pretrain_mae(model, dataset, batch_size, lr, pretrain_path):
     awl = AutomaticWeightedLoss(2)
     optimizer = Adam([
                 {'params': model.parameters()},
-                {'params': awl.parameters(), 'weight_decay': 0}
             ], lr=lr)
-    for epoch in tqdm(range(30), desc='Pretrain'):
+    for epoch in range(40):
         total_loss = 0.
-        total_contras_loss = 0.
         total_contro_loss = 0.
         new_idx = torch.randperm(x.size()[0])
         for batch in range(n_batch):
@@ -549,14 +601,21 @@ def pretrain_mae(model, dataset, batch_size, lr, pretrain_path):
             idx = idx.to(device)
 
             x_train = x[idx, :, :, :].to(device)
-            
+
             optimizer.zero_grad()
+            z2, loss2, _, q2 = model(x_train)
             
-            z, loss, _, q = model(x_train)
-    
+            contro_loss = loss2
+            
+            loss = loss2
             total_loss = total_loss + loss.item()
+            total_contro_loss = total_contro_loss + contro_loss.item()
+            
             loss.backward()
             optimizer.step()
-
-        torch.save(model.state_dict(), f"{pretrain_path}")
-    print("model saved to {}.".format(f"{pretrain_path}"))
+        print("epoch {} loss={:.4f}".format(epoch,
+                                            total_loss / (batch + 1)))
+        print("epoch {} contro_loss={:.4f}".format(epoch,
+                                            total_contro_loss / (batch + 1)))
+        torch.save(model.state_dict(), 'mae_mouse_gene.pkl')
+    print("model saved to {}.".format('mae_mouse_gene.pkl'))
