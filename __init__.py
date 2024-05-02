@@ -2,7 +2,6 @@ import torch
 import math
 import random
 import tqdm
-import SpaGCN as spg
 import scanpy as sc
 import pandas as pd
 import numpy as np
