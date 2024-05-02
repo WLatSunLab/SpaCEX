@@ -268,7 +268,7 @@ def DEC(model, dataset, config):
             y_pred = clusters.cpu().detach().numpy()
             delta_label = np.sum(y_pred != y_pred_last).astype(np.float32) / y_pred.shape[0]
             y_pred_last = y_pred
-            print(len(np.unique(y_pred_last)))
+            #print(len(np.unique(y_pred_last)))
             if epoch==9:
                 break
             if epoch > 0 and delta_label < config['tol']:
