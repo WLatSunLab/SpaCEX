@@ -1,8 +1,8 @@
 import torch
 import time
 from scipy.stats import mvn
-from SpaCEX.src.main.SMM import update_SMM_parameters
-from SpaCEX.src.main.SMM import calculate_xi
+from SIGEL.src.main.SMM import update_SMM_parameters
+from SIGEL.src.main.SMM import calculate_xi
 
 
 def assign_clusters(X, Theta_updated):

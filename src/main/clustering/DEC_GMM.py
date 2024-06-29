@@ -11,7 +11,7 @@ from torch.nn.parameter import Parameter
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from sklearn.mixture import GaussianMixture
-from SpaCEX.src.main.LH import likelihood, regularization, size
+from SIGEL.src.main.LH import likelihood, regularization, size
 from torch.nn import Linear
 
 

@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
-from SpaCEX.src.main import driver
-from SpaCEX.src.main.SpaCEX_ETC.src.main.clustering.DEC import DEC
-from SpaCEX.src.main.SpaCEX_ETC.src.main._config import Config
+from SIGEL.src.main import driver
+from SIGEL.src.main.SIGEL_ETC.src.main.clustering.DEC import DEC
+from SIGEL.src.main.SIGEL_ETC.src.main._config import Config
 import pandas as pd
 import numpy as np
 import json
@@ -15,14 +15,14 @@ total: gene similarity matrix with size [N, N]
 
 What you will get return
 model: encoder that haved been trained
-y_pred: label that SpaCEX generative
+y_pred: label that SIGEL generative
 embedding: embedding that generatived by encoder
 
 Others
 If you wanna get other return such as x_bar or parameters of SMM, just rewrite DEC to get what you want.
 '''
 
-class SpaCEX():
+class SIGEL():
     def train(dataset, dataset_denoise=None, total=None, pretrain=False):
         config = Config(dataset='Mouse image', model='MAE').get_parameters()
         cuda = torch.cuda.is_available()

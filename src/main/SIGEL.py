@@ -3,9 +3,9 @@ import torch.nn as nn
 import SpaGCN as spg
 import pickle
 import scanpy as sc
-from SpaCEX.src.main import driver
-from SpaCEX.src.main.clustering.DEC import DEC
-from SpaCEX.src.main._config import Config
+from SIGEL.src.main import driver
+from SIGEL.src.main.clustering.DEC import DEC
+from SIGEL.src.main._config import Config
 import pandas as pd
 from tqdm import tqdm
 from scipy.sparse import csr_matrix
@@ -20,19 +20,19 @@ total: gene similarity matrix with size [N, N]
 
 What you will get return
 model: encoder that haved been trained
-y_pred: label that SpaCEX generative
+y_pred: label that SIGEL generative
 embedding: embedding that generatived by encoder
 
 Others
 If you wanna get other return such as x_bar or parameters of SMM, just rewrite DEC to get what you want.
 '''
 
-class SpaCEX():
+class SIGEL():
     # please choose the 151676 for testing
     def get_data(sample_id, data_type='image'):
         assert sample_id == '151676', "please choose the 151676 for testing"
         if data_type == 'image':
-            path_file = f"SpaCEX/data/DLPFC_matrix_{sample_id}.dat"
+            path_file = f"SIGEL/data/DLPFC_matrix_{sample_id}.dat"
             with open(path_file,'rb') as f:
                 all_gene_exp_matrices = pickle.load(f)
             all_gmat = {k:all_gene_exp_matrices[k].todense() for k in list(all_gene_exp_matrices.keys())}
@@ -40,7 +40,7 @@ class SpaCEX():
             
             return dataset
         else:
-            path_file = f"SpaCEX/data/{sample_id}_10xvisium.h5ad"
+            path_file = f"SIGEL/data/{sample_id}_10xvisium.h5ad"
             adata = sc.read_h5ad(path_file)
         
             return adata

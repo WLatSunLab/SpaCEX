@@ -453,7 +453,7 @@ class MAE(nn.Module):
                  norm_pix_loss=False,
                  alpha=1,
                  n_clusters=500,
-                 pretrain_path='SpaCEX/model_pretrained/SpaCEX.pkl'):
+                 pretrain_path='SIGEL/model_pretrained/SIGEL.pkl'):
         super(MAE, self).__init__()
         self.alpha = alpha
         self.pretrain_path = pretrain_path

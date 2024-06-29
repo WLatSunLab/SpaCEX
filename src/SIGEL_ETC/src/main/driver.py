@@ -1,4 +1,4 @@
-from SpaCEX.src.main.SpaCEX_ETC.src.main.encoder.MAE_encoder import MAE
+from SIGEL.src.main.SIGEL_ETC.src.main.encoder.MAE_encoder import MAE
 
 
 '''

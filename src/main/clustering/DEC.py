@@ -5,15 +5,15 @@ from tqdm import tqdm
 from sklearn.cluster import KMeans
 from sklearn.metrics.cluster import normalized_mutual_info_score as nmi_score
 from sklearn.metrics import adjusted_rand_score as ari_score
-from SpaCEX.src.main.SMM import initialize_SMM_parameters,calculate_xi
-from SpaCEX.src.main.EM import EM_algorithm
-from SpaCEX.src.main.LH import likelihood, regularization, size
+from SIGEL.src.main.SMM import initialize_SMM_parameters,calculate_xi
+from SIGEL.src.main.EM import EM_algorithm
+from SIGEL.src.main.LH import likelihood, regularization, size
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.parameter import Parameter
 from torch.optim import Adam
 from torch.utils.data import DataLoader
-from SpaCEX.src.main.LH import likelihood, regularization, size
+from SIGEL.src.main.LH import likelihood, regularization, size
 from torch.nn import Linear
 from tqdm import tqdm
 
